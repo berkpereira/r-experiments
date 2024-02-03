@@ -1,0 +1,165 @@
+---
+title: "Getting started with modelling interventions targeting social contacts"
+output:
+  bookdown::html_vignette2:
+    fig_caption: yes
+    code_folding: show
+pkgdown:
+  as_is: true
+vignette: >
+  %\VignetteIndexEntry{Getting started with modelling interventions targeting social contacts}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  dpi = 150
+)
+```
+
+```{r setup}
+library(epidemics)
+library(dplyr)
+library(ggplot2)
+```
+
+## Prepare population and initial conditions
+
+Prepare population and contact data.
+
+```{r}
+# load contact and population data from socialmixr::polymod
+polymod <- socialmixr::polymod
+contact_data <- socialmixr::contact_matrix(
+  polymod,
+  countries = "United Kingdom",
+  age.limits = c(0, 20, 40),
+  symmetric = TRUE, # matrix still asymmetric due to differences in subpopulation sizes; see $matrix.per.capita
+  per.capita = TRUE # this adds another element to contact_data; does not change what was there already
+)
+
+# prepare contact matrix
+contact_matrix <- t(contact_data$matrix)
+
+# prepare the demography vector
+demography_vector <- contact_data$demography$population
+names(demography_vector) <- rownames(contact_matrix)
+```
+
+Prepare initial conditions for each age group.
+
+```{r}
+# initial conditions
+initial_i <- 1e-6
+initial_conditions <- c(
+  S = 1 - initial_i, E = 0, I = initial_i, R = 0, V = 0
+)
+
+# build for all age groups
+initial_conditions <- rbind(
+  initial_conditions,
+  initial_conditions,
+  initial_conditions
+)
+
+# assign rownames for clarity
+rownames(initial_conditions) <- rownames(contact_matrix)
+```
+
+Prepare a population as a `population` class object.
+
+```{r}
+uk_population <- population(
+  name = "UK",
+  contact_matrix = contact_matrix,
+  demography_vector = demography_vector,
+  initial_conditions = initial_conditions
+)
+```
+
+## Prepare an intervention
+
+Prepare an intervention to simulate school closures.
+
+```{r}
+# prepare an intervention with a differential effect on age groups
+close_schools <- intervention(
+  name = "School closure",
+  type = "contacts",
+  time_begin = 200,
+  time_end = 300,
+  reduction = matrix(c(0.5, 0.001, 0.001))
+)
+
+# examine the intervention object
+close_schools
+```
+
+## Run epidemic model
+
+```{r}
+# run an epidemic model using `epidemic`
+output <- model_default_cpp(
+  population = uk_population,
+  intervention = list(contacts = close_schools),
+  time_end = 600, increment = 1.0
+)
+```
+
+## Prepare data and visualise infections
+
+Plot epidemic over time, showing only the number of individuals in the exposed and infected compartments.
+
+```{r class.source = 'fold-hide'}
+# plot figure of epidemic curve
+filter(output, compartment %in% c("exposed", "infectious")) %>%
+  ggplot(
+    aes(
+      x = time,
+      y = value,
+      col = demography_group,
+      linetype = compartment
+    )
+  ) +
+  geom_line() +
+  annotate(
+    geom = "rect",
+    xmin = close_schools$time_begin,
+    xmax = close_schools$time_end,
+    ymin = 0, ymax = 500e3,
+    fill = alpha("red", alpha = 0.2),
+    lty = "dashed"
+  ) +
+  annotate(
+    geom = "text",
+    x = mean(c(close_schools$time_begin, close_schools$time_end)),
+    y = 400e3,
+    angle = 90,
+    label = "School closure"
+  ) +
+  scale_y_continuous(
+    labels = scales::comma
+  ) +
+  scale_colour_brewer(
+    palette = "Dark2",
+    name = "Age group"
+  ) +
+  expand_limits(
+    y = c(0, 500e3)
+  ) +
+  coord_cartesian(
+    expand = FALSE
+  ) +
+  theme_bw() +
+  theme(
+    legend.position = "top"
+  ) +
+  labs(
+    x = "Simulation time (days)",
+    linetype = "Compartment",
+    y = "Individuals"
+  )
+```
