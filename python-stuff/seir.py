@@ -88,6 +88,12 @@ class SEEIIRModel(BaseModel):
         return [dSdt, dE1dt, dE2dt, dI1dt, dI2dt, dR1dt, dR2dt]
 
 if __name__ == '__main__':
+    # Example usage for SEIRModel
     seir_model = SEIRModel(beta=0.5, sigma=1/6, gamma=1/10, S0=0.99, E0=0.01, I0=0.0, R0=0.0)
+    seir_solution = seir_model.solve(t_span=[0, 160], t_eval=np.linspace(0, 160, 400))
+    seir_model.plot_results(seir_solution, ['Susceptible', 'Exposed', 'Infectious', 'Recovered'])
+
+    # Example usage for SEEIIRModel
     seeiir_model = SEEIIRModel(beta=0.5, sigma=1/6, gamma=1/10, mu=0.1, S0=0.99, E1_0=0.005, E2_0=0.005, I1_0=0.0, I2_0=0.0, R1_0=0.0, R2_0=0.0)
-    
+    seeiir_solution = seeiir_model.solve(t_span=[0, 160], t_eval=np.linspace(0, 160, 400))
+    seeiir_model.plot_results(seeiir_solution, ['Susceptible', 'Exposed 1', 'Exposed 2', 'Infectious 1', 'Infectious 2', 'Recovered 1', 'Recovered 2'])
