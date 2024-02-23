@@ -81,7 +81,7 @@ output <- model_default_cpp(
 
 
 # plot figure of epidemic curve
-plot(filter(output, compartment %in% c("exposed", "infectious")) %>%
+filter(output, compartment %in% c("exposed", "infectious")) %>%
   ggplot(
     aes(
       x = time,
@@ -127,4 +127,4 @@ plot(filter(output, compartment %in% c("exposed", "infectious")) %>%
     x = "Simulation time (days)",
     linetype = "Compartment",
     y = "Individuals"
-  ))
+  )

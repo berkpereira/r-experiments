@@ -1,0 +1,137 @@
+# We start by using elements of the Inference vignette
+
+```{r}
+library(pander)
+library(dplyr)
+library(tidyr)
+library(fluEvidenceSynthesis)
+library(reshape2)
+library(ggplot2)
+library(reshape2)
+```
+
+## Load all of the relevant data for the inference process
+
+### Two age groups, single risk group
+
+```{r}
+# Here we load the needed data and regroup it from 5 into two age groups.
+data("demography")
+data("polymod_uk")
+data("ili")
+
+# Virologically confirmed infections
+# THIS IS A KEY PIECE WHICH WE MAY BE MISSING
+data("confirmed.samples")
+
+# Group all the example data into two age groups:
+polymod <- polymod_uk[,c(1,2)]
+polymod[,3] <- rowSums(polymod_uk[,c(3,4,5,6,7,8)])
+polymod[,4] <- polymod_uk[,9]
+
+ili_df <- ili
+ili_df$ili <- ili$ili[,c(1,2)]
+ili_df$ili[,1] <- rowSums(ili$ili[,c(1,2,3,4)])
+ili_df$ili[,2] <- ili$ili[,5]
+ili_df$total.monitored <- ili$total.monitored[,c(1,2)]
+ili_df$total.monitored[,1] <- rowSums(ili$total.monitored[,c(1,2,3,4)])
+ili_df$total.monitored[,2] <- ili$total.monitored[,5]
+```
+
+The below is the [**problematic bit**]{.underline}, loading confirmed sample numbers (virological/serological data).
+
+```{r}
+confirmed.samples_df <- confirmed.samples
+# Create matrices of zeros with the same dimensions as the original matrices
+# For confirmed.samples$positive, assuming it has two columns after simplification
+confirmed.samples_df$positive <- matrix(0, nrow = nrow(confirmed.samples$positive), ncol = 2)
+
+# For confirmed.samples$total.samples, also assuming it has two columns after simplification
+confirmed.samples_df$total.samples <- matrix(0, nrow = nrow(confirmed.samples$total.samples), ncol = 2)
+```
+
+#### Load coverage data (historical)
+
+```{r}
+data(coverage)
+# Coverage rates for the low risk <65 and low risk 65+
+cov <- coverage[,c("Under.65","X65")]/100.0
+```
+
+#### Create vaccination calendar object
+
+```{r}
+vaccine_calendar <- as_vaccination_calendar(efficacy = c(0.7, 0.4), 
+                                        dates = coverage$Date,
+                                        coverage = cov, 
+                                        no_age_groups = 2, no_risk_groups = 1)
+```
+
+#### Choose initial parameter guesses (appropriate for two age groups, single risk group, hence 7 entries)
+
+```{r}
+initial_parameters <- c(0.1, 0.1, 1e-5, 0.16, 0.5, 0.5, -0.15) # 7-vector
+names(initial_parameters) <- c("epsilon_1", "epsilon_2", "psi", "transmissibility", "susceptibility_1", "susceptibility_2", "initial_infected")
+```
+
+#### Run inference (two age groups, single risk group)
+
+Best to use the in-built inference function, quite honestly.
+
+```{r}
+inference.res <- inference(demography = demography,
+                      vaccine_calendar = vaccine_calendar,
+                      polymod_data = as.matrix(polymod),
+                      ili = ili_df$ili,
+                      mon_pop = ili_df$total.monitored,
+                      n_pos = confirmed.samples_df$positive,
+                      n_samples = confirmed.samples_df$total.samples,
+                      initial = initial_parameters,
+                      age_groups = c(65), # NOTICE THIS, SEE DOCS FOR DETAILS
+                      nbatch = 3000,
+                      nburn = 1000, blen = 50)
+```
+
+# Analysing the results
+
+Plotting the resulting posterior parameter values[\^vignette-blend-1].
+
+We need to change the names used here in colnames depending on what number of parameters we have inferred!
+
+```{r}
+
+# Just below is the case for a 9-vector of parameters, based on the more complicated example in the online inference vignette
+# colnames(inference.res$batch) <- c("eps1", "eps2", "eps3", "psi", "q",
+#                                        "susc1", "susc2", "susc3", "I0")
+
+# Just below is the case for a 7-vector of parameters, based on the more complicated example in the online inference vignette
+colnames(inference.res$batch) <- c("eps1", "eps2", "psi", "q",
+                                        "susc1", "susc2", "I0")
+
+ggplot(data=melt(inference.res$batch)) + facet_wrap( ~ Var2, ncol=3, scales="free" ) + geom_histogram(aes(x=value), bins=25)
+
+```
+
+
+
+```{r}
+library(ggplot2)
+library(reshape2)
+
+# Assuming inference.res$batch is already defined and colnames set
+melted_data <- melt(inference.res$batch)
+
+# Improved plot with adjusted labels and theme
+ggplot(melted_data, aes(x=value)) + 
+  geom_histogram(bins=25) + 
+  facet_wrap(~ Var2, ncol=3, scales="free") + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8), # Rotate x-axis labels and adjust size
+        axis.text.y = element_text(size = 8), # Adjust y-axis label size
+        strip.text = element_text(size = 8)) + # Adjust facet label size
+  labs(x = NULL, y = "Frequency") + # Optionally remove x label for cleanliness
+  theme_minimal() # Use a minimal theme for more space
+
+
+
+```
+

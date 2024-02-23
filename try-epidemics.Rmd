@@ -8,15 +8,17 @@ pkgdown:
   as_is: true
 vignette: >
   %\VignetteIndexEntry{Getting started with modelling interventions targeting social contacts}
-  %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r, include = FALSE}
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",
-  dpi = 150
+  dpi = 400
 )
 ```
 
@@ -30,26 +32,32 @@ library(ggplot2)
 
 Prepare population and contact data.
 
+Note: contact_data$matrix is a matrix containing contact rates, i.e., entry ij will be equal to the mean number of encounters reported by a member of subpopulation i with members of subpopulation j. This is why ASYMMETRY occurs in this matrix (even setting aside anomalies due to sampling) --- imagine only 2 subpopulations A (with a single individual) and B (with two individuals). If the member of A encounters both members of B, the rate AB is 2, whereas the rate BA is 1.
+Setting aside anomalies due to sampling, the symmetry we should observe is that rate AB * size(A) = rate BA * size(B). This is controlled by setting the option < symmetric = TRUE > below.
 ```{r}
-# load contact and population data from socialmixr::polymod
+# load contact and population data from socialmixr::polymod, the 2000s social survey
 polymod <- socialmixr::polymod
+
+# contact_data$matrix is indexed like this: 3rd row, 1st column gives the rate reported by the 3rd subpopulation of encounters with members of the 1st subpopulation
 contact_data <- socialmixr::contact_matrix(
   polymod,
   countries = "United Kingdom",
   age.limits = c(0, 20, 40),
   symmetric = TRUE, # matrix still asymmetric due to differences in subpopulation sizes; see $matrix.per.capita
-  per.capita = TRUE # this adds another element to contact_data; does not change what was there already
+  per.capita = TRUE # this adds another element to contact_data; does NOT change what was there already
 )
 
 # prepare contact matrix
-contact_matrix <- t(contact_data$matrix)
+contact_matrix <- t(contact_data$matrix) # taking transpose
+# resulting contact_matrix, due to the transpose operation, is indexed like this: 3rd row, 1st column gives the rate reported by the 1st subpopulation of encounters with members of the 3rd population 
 
 # prepare the demography vector
-demography_vector <- contact_data$demography$population
-names(demography_vector) <- rownames(contact_matrix)
+demography_vector <- contact_data$demography$population # subpopulation sizes
+names(demography_vector) <- rownames(contact_matrix) # label with age brackets
 ```
 
 Prepare initial conditions for each age group.
+These are given as proportions of the (sub)populations. E.g., initial_i <- 1e-6 corresponds to a millionth of the population starting out in the I(nfected) compartment (about 60 people given the 60 million UK inhabitants as of POLYMOD survey, 2005).
 
 ```{r}
 # initial conditions
@@ -58,12 +66,9 @@ initial_conditions <- c(
   S = 1 - initial_i, E = 0, I = initial_i, R = 0, V = 0
 )
 
-# build for all age groups
-initial_conditions <- rbind(
-  initial_conditions,
-  initial_conditions,
-  initial_conditions
-)
+# build for all age groups.
+# vignette uses same proportions in all age group subpopulations.
+initial_conditions <- do.call(rbind, replicate(nrow(contact_matrix), initial_conditions, simplify = FALSE))
 
 # assign rownames for clarity
 rownames(initial_conditions) <- rownames(contact_matrix)
@@ -89,8 +94,8 @@ Prepare an intervention to simulate school closures.
 close_schools <- intervention(
   name = "School closure",
   type = "contacts",
-  time_begin = 200,
-  time_end = 300,
+  time_begin = 100,
+  time_end = 110,
   reduction = matrix(c(0.5, 0.001, 0.001))
 )
 
