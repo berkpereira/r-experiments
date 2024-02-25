@@ -1,3 +1,5 @@
+setwd("repos/r-experiments/week5")
+
 
 library(fluEvidenceSynthesis)
 library(pander)
@@ -5,10 +7,10 @@ library(ggplot2)
 library(dplyr)
 library(tidyr)
 library(epiparameter)
+library(qs)
 
 data(polymod_uk)
 data(demography)
-
 
 # Implement the vignette modelling runs in an easy function
 
