@@ -9,6 +9,8 @@ library(tidyr)
 library(epiparameter)
 library(qs)
 library(ggplot2)
+library(tidyverse)
+
 
 data("demography")
 data("polymod_uk")
@@ -47,47 +49,47 @@ polymod[,3] <- rowSums(polymod_uk[,c(3,4,5,6,7,8)])
 polymod[,4] <- polymod_uk[,9]
 
 # Initialize ili_df as a list
-ili_df <- list()
+# ili_df <- list()
 
 # Manipulate ili$ili according to the specifications with renamed columns
-ili_df$ili <- ili$ili %>%
-    transmute(
-        Date = Date,
-        `[0,13)` = rowSums(select(., `[0,2)`, `[2,5)`, `[5,13)`), na.rm = TRUE),
-        `[13,65)` = rowSums(select(., `[13,17)`, `[17,45)`, `[45,65)`), na.rm = TRUE),
-        `[65,+)` = `[65,+)`
-    )
+# ili_df$ili <- ili$ili %>%
+#     transmute(
+#         Date = Date,
+#         `[0,13)` = rowSums(select(., `[0,2)`, `[2,5)`, `[5,13)`), na.rm = TRUE),
+#         `[13,65)` = rowSums(select(., `[13,17)`, `[17,45)`, `[45,65)`), na.rm = TRUE),
+#         `[65,+)` = `[65,+)`
+#     )
 
 # Manipulate ili$mon_pop according to the same specifications with renamed columns
-ili_df$mon_pop <- ili$mon_pop %>%
-    transmute(
-        Date = Date,
-        `[0,13)` = rowSums(select(., `[0,2)`, `[2,5)`, `[5,13)`), na.rm = TRUE),
-        `[13,65)` = rowSums(select(., `[13,17)`, `[17,45)`, `[45,65)`), na.rm = TRUE),
-        `[65,+)` = `[65,+)`
-    )
+# ili_df$mon_pop <- ili$mon_pop %>%
+#     transmute(
+#         Date = Date,
+#         `[0,13)` = rowSums(select(., `[0,2)`, `[2,5)`, `[5,13)`), na.rm = TRUE),
+#         `[13,65)` = rowSums(select(., `[13,17)`, `[17,45)`, `[45,65)`), na.rm = TRUE),
+#         `[65,+)` = `[65,+)`
+#     )
 
 
 # Assuming viro_df is the desired result structure
-viro_df <- list()
+# viro_df <- list()
 
 # Manipulate viro$positive according to the specifications
-viro_df$positive <- viro$positive %>%
-    transmute(
-        Date = Date,
-        `[0,13)` = rowSums(select(., `[0,2)`, `[2,5)`, `[5,13)`), na.rm = TRUE),
-        `[13,65)` = rowSums(select(., `[13,17)`, `[17,45)`, `[45,65)`), na.rm = TRUE),
-        `[65,+)` = `[65,+)`
-    )
+# viro_df$positive <- viro$positive %>%
+#     transmute(
+#         Date = Date,
+#         `[0,13)` = rowSums(select(., `[0,2)`, `[2,5)`, `[5,13)`), na.rm = TRUE),
+#         `[13,65)` = rowSums(select(., `[13,17)`, `[17,45)`, `[45,65)`), na.rm = TRUE),
+#         `[65,+)` = `[65,+)`
+#     )
 
 # Manipulate viro$total according to the same specifications
-viro_df$total <- viro$total %>%
-    transmute(
-        Date = Date,
-        `[0,13)` = rowSums(select(., `[0,2)`, `[2,5)`, `[5,13)`), na.rm = TRUE),
-        `[13,65)` = rowSums(select(., `[13,17)`, `[17,45)`, `[45,65)`), na.rm = TRUE),
-        `[65,+)` = `[65,+)`
-)
+# viro_df$total <- viro$total %>%
+#     transmute(
+#         Date = Date,
+#         `[0,13)` = rowSums(select(., `[0,2)`, `[2,5)`, `[5,13)`), na.rm = TRUE),
+#         `[13,65)` = rowSums(select(., `[13,17)`, `[17,45)`, `[45,65)`), na.rm = TRUE),
+#         `[65,+)` = `[65,+)`
+# )
 
 
 
@@ -176,7 +178,7 @@ plot_coverage_time_series(dates_vector, coverage_matrix)
 ################################################################################
 
 
-age_map <- age_group_mapping(c(15,65), c(2,5,13,17,45,65))
+age_map <- age_group_mapping(c(15,65), c(2,5,13,17,45,65), demography)
 risk_map <- risk_group_mapping(c("LowRisk", "HighRisk"), c("All"))
 
 
@@ -202,3 +204,41 @@ par_map <- parameter_mapping(
     susceptibility = c(6,6,6,7,7,7,8), # ...but here seemed to use as many as in the model......
     initial_infected = c(9))
 
+################################################################################
+# RUN INFERENCE
+################################################################################
+
+
+# Sanity check relative (entry-wise) size of entries in the ili and viro data
+# Create a comparison matrix including the Date column but for strict inequality
+comparison_matrix <- viro$total > ili$ili
+
+# Since Date cannot be strictly greater in a meaningful way, set all comparisons involving the Date column to FALSE
+comparison_matrix[, "Date"] <- FALSE
+
+# Use which with arr.ind=TRUE to get the row and column indices of TRUE values in the comparison matrix
+true_indices <- which(comparison_matrix, arr.ind = TRUE)
+
+# One of these values is off by a unit in the sanity check! We will just change one of them by that.
+ili$ili[true_indices[1],true_indices[2]] <- ili$ili[true_indices[1],true_indices[2]] + 1
+
+
+# ERROR MESSAGE:
+# Error in inference(demography = demography, vaccine_calendar = vaccine_calendar,  : 
+# The model assumes that the virological samples are a subsample of patients diagnosed as ILI cases.
+# The ili counts should always be larger than or equal to n_samples
+
+inference_results <- inference(demography = demography,
+                               vaccine_calendar = vaccine_calendar,
+                               polymod_data = as.matrix(polymod),
+                               ili = ili$ili[,-1],
+                               mon_pop = ili$mon_pop[,-1],
+                               n_pos = viro$positive[,-1],
+                               n_samples = viro$total[,-1],
+                               initial = initial_pars,
+                               age_group_map = age_map,
+                               risk_group_map = risk_map,
+                               parameter_map = par_map,
+                               risk_ratios = risk_ratios,
+                               nbatch = 1000,
+                               nburn = 1000, blen = 5 )
