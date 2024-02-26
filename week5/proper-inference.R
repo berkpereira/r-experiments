@@ -8,6 +8,7 @@ library(dplyr)
 library(tidyr)
 library(epiparameter)
 library(qs)
+library(ggplot2)
 
 data("demography")
 data("polymod_uk")
@@ -104,13 +105,17 @@ rm(polymod_uk) # Get rid of this to avoid confusion
 contacts <- contact_matrix(as.matrix(polymod), demography, c(15,65))
 
 # Separate into 3 age groups
-ag <- stratify_by_age(demography, limits=c(15, 65)) # c( 43670500, 8262600 )
+ag <- stratify_by_age(demography, limits=c(15, 65))
+
 
 # THE BELOW TAKES NUMBERS FROM EDWIN'S VIGNETTES
 # Separate in risk groups. In this case we assume one additional (high) risk groups and that respectively 
 # 1 percent of non elderly and 40% of elderly (65+) are in this risk group.
-population <- stratify_by_risk(ag, matrix(c(0.01, 0.01, 0.4),nrow=1), 
+risk_ratios <- c(0.01, 0.01, 0.4)
+risk_ratios <- matrix(risk_ratios, nrow=1)
+population <- stratify_by_risk(ag, risk_ratios, 
                                labels = c("LowRisk", "HighRisk"))
+
 
 
 ################################################################################
@@ -144,3 +149,56 @@ vaccine_calendar <- as_vaccination_calendar(
     no_age_groups = 3,
     no_risk_groups = 2
 )
+
+plot_coverage_time_series <- function(dates, coverage) {
+    # Convert the coverage matrix to a long format data frame suitable for ggplot2
+    coverage_df <- as.data.frame(coverage)
+    names(coverage_df) <- paste("Series", 1:ncol(coverage_df), sep = "_")
+    coverage_df$Date <- dates
+    long_coverage_df <- reshape2::melt(coverage_df, id.vars = "Date", variable.name = "Series", value.name = "Coverage")
+    
+    # Plotting
+    ggplot(data = long_coverage_df, aes(x = Date, y = Coverage, color = Series)) +
+        geom_line() +
+        geom_point() +
+        theme_minimal() +
+        labs(title = "Coverage Over Time", x = "Date", y = "Coverage (%)", color = "Series") +
+        scale_y_continuous(labels = scales::percent_format(accuracy = 1)) # Display y-axis labels as percentages
+}
+
+# Use the function with your data
+plot_coverage_time_series(dates_vector, coverage_matrix)
+
+
+
+################################################################################
+# POPULATION AND PARAMETER MAPPINGS
+################################################################################
+
+
+age_map <- age_group_mapping(c(15,65), c(2,5,13,17,45,65))
+risk_map <- risk_group_mapping(c("LowRisk", "HighRisk"), c("All"))
+
+
+initial_pars <- c(0.1, 0.1, 0.1, # epsilon, ascertainment probability
+                  1e-5,          # psi, outside/imported infection
+                  0.15,          # q, transmissibility
+                  0.6, 0.6, 0.6, # sigma, susceptibility
+                  0.5)           # log_10(I0), log-transformed initial number of infections
+
+# Set names for clarity
+names(initial_pars) <- c("epsilon_1", "epsilon_2", "epsilon_3",
+                         "psi",
+                         "transmissibility",
+                         "susceptibility_1", "susceptibility_2", "susceptibility_3",
+                         "log_initial_infec")
+
+# TAKE SPECIAL CARE WITH THIS. VIGNETTE EXAMPLE SEEMS TO BE BASED ON NUMBER OF AGE GROUPS
+# IN THE DATA FOR EPSILON BUT ON THE NUMBER OF AGE GROUPS IN THE MODEL FOR SUSCEPTIBILITY....???
+par_map <- parameter_mapping(
+    epsilon = c(1,1,1,2,2,2,3), # Unsure about this one... Vignette seems to use as many age groups as in the data...
+    psi = 4,
+    transmissibility = 5,
+    susceptibility = c(6,6,6,7,7,7,8), # ...but here seemed to use as many as in the model......
+    initial_infected = c(9))
+
