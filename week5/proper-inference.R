@@ -113,7 +113,9 @@ ag <- stratify_by_age(demography, limits=c(15, 65))
 # THE BELOW TAKES NUMBERS FROM EDWIN'S VIGNETTES
 # Separate in risk groups. In this case we assume one additional (high) risk groups and that respectively 
 # 1 percent of non elderly and 40% of elderly (65+) are in this risk group.
-risk_ratios <- c(0.01, 0.01, 0.4)
+
+risk_ratios <- c(0.1, 0.05, 0.4) # PAY ATTENTION TO THESE FIGURES HERE
+
 risk_ratios <- matrix(risk_ratios, nrow=1)
 population <- stratify_by_risk(ag, risk_ratios, 
                                labels = c("LowRisk", "HighRisk"))
@@ -198,11 +200,15 @@ names(initial_pars) <- c("epsilon_1", "epsilon_2", "epsilon_3",
 # TAKE SPECIAL CARE WITH THIS. VIGNETTE EXAMPLE SEEMS TO BE BASED ON NUMBER OF AGE GROUPS
 # IN THE DATA FOR EPSILON BUT ON THE NUMBER OF AGE GROUPS IN THE MODEL FOR SUSCEPTIBILITY....???
 par_map <- parameter_mapping(
-    epsilon = c(1,1,1,2,2,2,3), # Unsure about this one... Vignette seems to use as many age groups as in the data...
+    epsilon = c(1,1,1,2,2,2,3), # Unsure about this one... Vignette seems to use as many age groups as in the data here...
     psi = 4,
     transmissibility = 5,
     susceptibility = c(6,6,6,7,7,7,8), # ...but here seemed to use as many as in the model......
+    #susceptibility = c(6,7,8), # trying something different, did not work out very well!
     initial_infected = c(9))
+
+
+
 
 ################################################################################
 # RUN INFERENCE
@@ -228,17 +234,48 @@ ili$ili[true_indices[1],true_indices[2]] <- ili$ili[true_indices[1],true_indices
 # The model assumes that the virological samples are a subsample of patients diagnosed as ILI cases.
 # The ili counts should always be larger than or equal to n_samples
 
-inference_results <- inference(demography = demography,
-                               vaccine_calendar = vaccine_calendar,
-                               polymod_data = as.matrix(polymod),
-                               ili = ili$ili[,-1],
-                               mon_pop = ili$mon_pop[,-1],
-                               n_pos = viro$positive[,-1],
-                               n_samples = viro$total[,-1],
-                               initial = initial_pars,
-                               age_group_map = age_map,
-                               risk_group_map = risk_map,
-                               parameter_map = par_map,
-                               risk_ratios = risk_ratios,
-                               nbatch = 1000,
-                               nburn = 1000, blen = 5 )
+RUNNING_INFERENCE = T
+
+
+if (RUNNING_INFERENCE) {
+    inference_results <- inference(demography = demography,
+                                   vaccine_calendar = vaccine_calendar,
+                                   polymod_data = as.matrix(polymod),
+                                   ili = ili$ili[,-1],
+                                   mon_pop = ili$mon_pop[,-1],
+                                   n_pos = viro$positive[,-1],
+                                   n_samples = viro$total[,-1],
+                                   initial = initial_pars,
+                                   age_group_map = age_map,
+                                   risk_group_map = risk_map,
+                                   parameter_map = par_map,
+                                   risk_ratios = risk_ratios,
+                                   nbatch = 10000,
+                                   nburn = 1000, blen = 10)
+}
+
+
+
+################################################################################
+# ANALYSE INFERENCE RESULTS
+################################################################################
+
+# Convert the batch results to a tibble for better handling with tidyverse functions
+batch_tibble <- as_tibble(inference_results$batch)
+
+# # Rename the columns to be more descriptive
+# batch_tibble <- batch_tibble %>%
+#     rename(eps1 = V1, eps2 = V2, eps3 = V3, psi = V4, q = V5, 
+#            susc1 = V6, susc2 = V7, susc3 = V8, I0 = V9)
+
+# Pivot the data to a long format
+batch_long <- batch_tibble %>%
+    pivot_longer(cols = everything(), names_to = "Parameter", values_to = "Value")
+
+# Plot histograms for each parameter
+ggplot(batch_long, aes(x = Value)) +
+    geom_histogram(bins = 25, fill = "blue", color = "black") +
+    facet_wrap(~ Parameter, ncol = 3, scales = "free") +
+    theme_minimal() +
+    labs(x = "Parameter Value", y = "Frequency", title = "Histograms of Inference Parameters")
+
