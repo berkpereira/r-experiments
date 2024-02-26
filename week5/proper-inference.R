@@ -134,10 +134,10 @@ population <- stratify_by_risk(ag, risk_ratios,
 # The coverage data below is somewhat loosely based on the real coverage data
 # for the 2022-23 season.
 
-dates_vector <- as.Date(c("2022-09-01", "2022-09-30", "2022-10-31",
+baseline_dates_vector <- as.Date(c("2022-09-01", "2022-09-30", "2022-10-31",
                           "2022-11-30", "2022-12-31", "2023-01-31", "2023-02-28"))
 
-coverage_matrix = rbind(c(0, 0, 0, 0, 0, 0),
+baseline_coverage_matrix = rbind(c(0, 0, 0, 0, 0, 0),
                         c(0.015, 0.013,  0.07, 0.030, 0.067, 0.14),
                         c(0.073, 0.061, 0.218, 0.146, 0.308, 0.436),
                         c(0.133, 0.085, 0.254, 0.266, 0.427, 0.508),
@@ -148,8 +148,8 @@ coverage_matrix = rbind(c(0, 0, 0, 0, 0, 0),
 # VACCINE EFFICACY ASSUMPTIONS HELPED BY Baguelin2013.pdf, page 6
 vaccine_calendar <- as_vaccination_calendar(
     efficacy = c(0.7, 0.7, 0.46, 0.7, 0.7, 0.46),
-    coverage = as.data.frame(coverage_matrix),
-    dates = dates_vector,
+    coverage = as.data.frame(baseline_coverage_matrix),
+    dates = baseline_dates_vector,
     no_age_groups = 3,
     no_risk_groups = 2
 )
@@ -174,7 +174,7 @@ plot_coverage_time_series <- function(dates, coverage) {
 PLOT_COVERAGE <- F
 
 if (PLOT_COVERAGE) {
-    plot_coverage_time_series(dates_vector, coverage_matrix)
+    plot_coverage_time_series(baseline_dates_vector, baseline_coverage_matrix)
 }
 
 
@@ -292,5 +292,5 @@ ggplot(batch_long, aes(x = Value)) +
 ################################################################################
 
 save(plot_coverage_time_series, strain, population, polymod,
-     dates_vector, coverage_matrix,
+     baseline_dates_vector, baseline_coverage_matrix,
      risk_ratios, contacts, file = "inference-data-results.RData")
