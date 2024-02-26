@@ -170,8 +170,13 @@ plot_coverage_time_series <- function(dates, coverage) {
         scale_y_continuous(labels = scales::percent_format(accuracy = 1)) # Display y-axis labels as percentages
 }
 
-# Use the function with your data
-plot_coverage_time_series(dates_vector, coverage_matrix)
+
+PLOT_COVERAGE <- F
+
+if (PLOT_COVERAGE) {
+    plot_coverage_time_series(dates_vector, coverage_matrix)
+}
+
 
 
 
@@ -234,7 +239,7 @@ ili$ili[true_indices[1],true_indices[2]] <- ili$ili[true_indices[1],true_indices
 # The model assumes that the virological samples are a subsample of patients diagnosed as ILI cases.
 # The ili counts should always be larger than or equal to n_samples
 
-RUNNING_INFERENCE = T
+RUNNING_INFERENCE = F
 
 
 if (RUNNING_INFERENCE) {
@@ -279,3 +284,13 @@ ggplot(batch_long, aes(x = Value)) +
     theme_minimal() +
     labs(x = "Parameter Value", y = "Frequency", title = "Histograms of Inference Parameters")
 
+
+
+
+################################################################################
+# SAVE SOME OF THE OUTPUT OF THIS SCRIPT
+################################################################################
+
+save(plot_coverage_time_series, strain, population, polymod,
+     dates_vector, coverage_matrix,
+     risk_ratios, contacts, file = "inference-data-results.RData")
