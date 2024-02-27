@@ -59,7 +59,8 @@ if (PLOT_COVERAGE) {
 }
 
 
-modify_coverage_data <- function(baseline_dates, baseline_coverage, start_date_shift = 0, coverage_scaling = 1) {
+modify_coverage_data <- function(baseline_dates, baseline_coverage,
+                                 start_date_shift = 0, coverage_scaling = 1) {
     # Check if coverage_scaling is within the valid range
     max_coverage_value <- max(baseline_coverage)
     if(coverage_scaling <= 0 || coverage_scaling > 1 / max_coverage_value) {
@@ -96,15 +97,13 @@ modify_coverage_data <- function(baseline_dates, baseline_coverage, start_date_s
 
 
 
-
 coverage_scaling = 1.1
-
-
-# Assuming baseline_dates_vector and baseline_coverage_matrix are already defined
+vaccine_calendar_shift = 30
 
 temp <- modify_coverage_data(baseline_dates_vector,
                              baseline_coverage_matrix,
-                             coverage_scaling = coverage_scaling)
+                             coverage_scaling = coverage_scaling,
+                             start_date_shift = vaccine_calendar_shift)
     
 new_dates_vector <- temp[[1]]
 new_coverage_matrix <- temp[[2]]

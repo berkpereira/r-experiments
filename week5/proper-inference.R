@@ -204,7 +204,7 @@ ili$ili[true_indices[1],true_indices[2]] <- ili$ili[true_indices[1],true_indices
 # The model assumes that the virological samples are a subsample of patients diagnosed as ILI cases.
 # The ili counts should always be larger than or equal to n_samples
 
-RUNNING_INFERENCE = T
+RUNNING_INFERENCE = F
 
 
 if (RUNNING_INFERENCE) {
@@ -230,24 +230,109 @@ if (RUNNING_INFERENCE) {
 # ANALYSE INFERENCE RESULTS
 ################################################################################
 
-# Convert the batch results to a tibble for better handling with tidyverse functions
-batch_tibble <- as_tibble(inference_results$batch)
 
-# # Rename the columns to be more descriptive
-# batch_tibble <- batch_tibble %>%
-#     rename(eps1 = V1, eps2 = V2, eps3 = V3, psi = V4, q = V5, 
-#            susc1 = V6, susc2 = V7, susc3 = V8, I0 = V9)
+plot_param_hists <- function(inference_results_batch) {
+    # Convert the batch results to a tibble for better handling with tidyverse functions
+    batch_tibble <- as_tibble(inference_results$batch)
+    
+    
+    # Pivot the data to a long format
+    batch_long <- batch_tibble %>%
+        pivot_longer(cols = everything(), names_to = "Parameter", values_to = "Value")
+    
+    # Plot histograms for each parameter
+    ggplot(batch_long, aes(x = Value)) +
+        geom_histogram(bins = 25, fill = "blue", color = "black") +
+        facet_wrap(~ Parameter, ncol = 3, scales = "free") +
+        theme_minimal() +
+        labs(x = "Parameter Value", y = "Frequency", title = "Histograms of Inference Parameters")
+}
 
-# Pivot the data to a long format
-batch_long <- batch_tibble %>%
-    pivot_longer(cols = everything(), names_to = "Parameter", values_to = "Value")
 
-# Plot histograms for each parameter
-ggplot(batch_long, aes(x = Value)) +
-    geom_histogram(bins = 25, fill = "blue", color = "black") +
-    facet_wrap(~ Parameter, ncol = 3, scales = "free") +
-    theme_minimal() +
-    labs(x = "Parameter Value", y = "Frequency", title = "Histograms of Inference Parameters")
+
+PLOT_INFERENCE_RESULTS = F
+
+if (PLOT_INFERENCE_RESULTS) {
+    plot_param_hists(inference_results_batch = inference_results$batch)
+}
+
+
+
+
+
+
+################################################################################
+# ANALYSE CONVERGENCE OF MCMC INFERENCE RESULTS
+################################################################################
+
+
+monitor_convergence <- function(nbatch_values, blen_values, param_names) {
+    library(dplyr)
+    library(tidyr)
+    
+    # Initialize an empty list to store results for comparison
+    previous_means <- NULL
+    
+    # Loop through the range of nbatch and blen values
+    for(i in seq_along(nbatch_values)) {
+        # Run the inference with the current nbatch and blen values
+        inference_results <- inference(demography = demography,
+                                       vaccine_calendar = vaccine_calendar,
+                                       polymod_data = as.matrix(polymod),
+                                       ili = ili$ili[,-1],
+                                       mon_pop = ili$mon_pop[,-1],
+                                       n_pos = viro$positive[,-1],
+                                       n_samples = viro$total[,-1],
+                                       initial = initial_pars,
+                                       age_group_map = age_map,
+                                       risk_group_map = risk_map,
+                                       parameter_map = par_map,
+                                       risk_ratios = risk_ratios,
+                                       nbatch = nbatch_values[i],
+                                       nburn = 1000, blen = blen_values[i])
+        
+        # Convert the batch results to a tibble
+        batch_tibble <- as_tibble(inference_results$batch)
+        
+        # Calculate means for each parameter in the current batch
+        current_means <- batch_tibble %>%
+            summarise(across(everything(), mean))
+        
+        # If not the first iteration, calculate differences in means from the previous iteration
+        if (!is.null(previous_means)) {
+            differences <- abs(previous_means - current_means)
+            cat("Differences in parameter means from run", i-1, "to", i, ":\n")
+            print(differences)
+        }
+        
+        # Update previous_means for the next iteration
+        previous_means <- current_means
+    }
+}
+
+# Example usage
+nbatch_values <- c(5000, 10000, 15000)  # Example range of nbatch values
+blen_values <- c(20, 25, 30)  # Example range of blen values
+param_names <- c("epsilon_1", "epsilon_2", "epsilon_3", "psi", "transmissibility", "susceptibility_1", "susceptibility_2", "susceptibility_3", "log_initial_infec")  # Parameter names
+
+monitor_convergence(nbatch_values, blen_values, param_names)
+
+
+
+
+
+
+# Example usage
+# Assuming 'inference_function' is your MCMC or other inference function,
+# and 'fixed_params' are the parameters that remain constant across runs.
+fixed_params <- list(other_param1 = value1, other_param2 = value2) # Example fixed parameters
+varying_params_range <- list(nbatch = c(100, 200, 300), blen = c(10, 20, 30))
+param_names <- c("param1", "param2", "param3", "param4", "param5", "param6", "param7", "param8", "param9")
+
+monitor_convergence(inference_function, fixed_params, varying_params_range, param_names)
+
+
+
 
 
 
@@ -256,7 +341,11 @@ ggplot(batch_long, aes(x = Value)) +
 # SAVE SOME OF THE OUTPUT OF THIS SCRIPT
 ################################################################################
 
-save(plot_coverage_time_series, strain, population, polymod,
-     baseline_dates_vector, baseline_coverage_matrix,
-     risk_ratios, contacts, inference_results, batch_tibble,
-     baseline_vaccine_efficacy, file = "inference-data-results.RData")
+SAVE_RESULTS <- F
+
+if (SAVE_RESULTS) {
+    save(plot_coverage_time_series, strain, population, polymod,
+         baseline_dates_vector, baseline_coverage_matrix,
+         risk_ratios, contacts, inference_results, batch_tibble,
+         baseline_vaccine_efficacy, file = "inference-data-results.RData")
+}
