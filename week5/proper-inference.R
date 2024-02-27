@@ -207,25 +207,25 @@ ili$ili[true_indices[1],true_indices[2]] <- ili$ili[true_indices[1],true_indices
 # The model assumes that the virological samples are a subsample of patients diagnosed as ILI cases.
 # The ili counts should always be larger than or equal to n_samples
 
-RUNNING_INFERENCE = FALSE
-
-
-if (RUNNING_INFERENCE) {
-    inference_results <- inference(demography = demography,
-                                   vaccine_calendar = vaccine_calendar,
-                                   polymod_data = as.matrix(polymod),
-                                   ili = ili$ili[,-1],
-                                   mon_pop = ili$mon_pop[,-1],
-                                   n_pos = viro$positive[,-1],
-                                   n_samples = viro$total[,-1],
-                                   initial = initial_pars,
-                                   age_group_map = age_map,
-                                   risk_group_map = risk_map,
-                                   parameter_map = par_map,
-                                   risk_ratios = risk_ratios,
-                                   nbatch = 5000,
-                                   nburn = 1000, blen = 20)
-}
+# RUNNING_INFERENCE = FALSE
+# 
+# 
+# if (RUNNING_INFERENCE) {
+#     inference_results <- inference(demography = demography,
+#                                    vaccine_calendar = vaccine_calendar,
+#                                    polymod_data = as.matrix(polymod),
+#                                    ili = ili$ili[,-1],
+#                                    mon_pop = ili$mon_pop[,-1],
+#                                    n_pos = viro$positive[,-1],
+#                                    n_samples = viro$total[,-1],
+#                                    initial = initial_pars,
+#                                    age_group_map = age_map,
+#                                    risk_group_map = risk_map,
+#                                    parameter_map = par_map,
+#                                    risk_ratios = risk_ratios,
+#                                    nbatch = 5000,
+#                                    nburn = 1000, blen = 20)
+# }
 
 
 
@@ -274,11 +274,14 @@ monitor_convergence <- function(nbatch_values, blen_values, param_names, tandem 
     # Initialize an empty list to store results for comparison
     previous_means <- NULL
     
+    cat(rep("-", 100), sep="", collapse="")
+    cat("\n") # Move to the next line after printing the dashes
+    
     if (tandem) {
         # Tandem is TRUE: vary nbatch and blen together
         for(i in seq_along(nbatch_values)) {
             inference_results <- run_inference(nbatch_values[i], blen_values[i])
-            current_means <- process_results(inference_results, previous_means, i)
+            current_means <- process_results(inference_results, previous_means, paste("Tandem run no. = ", i))
             previous_means <- current_means
         }
     } else {
@@ -291,6 +294,11 @@ monitor_convergence <- function(nbatch_values, blen_values, param_names, tandem 
             }
         }
     }
+    cat(rep("-", 100), sep="", collapse="")
+    cat("\n") # Move to the next line after printing the dashes
+    
+    # RETURN THE LAST SET OF INFERENCE RESULTS
+    return(inference_results)
 }
 
 run_inference <- function(nbatch, blen) {
@@ -322,23 +330,16 @@ process_results <- function(inference_results, previous_means, iteration_info) {
     current_means
 }
 
+
+
 # Example usage
-nbatch_values <- c(5000, 10000, 15000)
-blen_values <- c(5, 10, 20)
+nbatch_values <- c(1000, 2000, 5000)
+blen_values <- c(5, 5, 5)
 param_names <- c("epsilon_1", "epsilon_2", "epsilon_3", "psi",
                  "transmissibility", "susceptibility_1", "susceptibility_2",
                  "susceptibility_3", "log_initial_infec")
 
-monitor_convergence(nbatch_values, blen_values, param_names, tandem = TRUE)
-
-
-# To run with all combinations of nbatch and blen values (tandem = FALSE)
-# monitor_convergence(nbatch_values, blen_values, param_names, tandem = FALSE)
-
-
-
-
-
+inference_results <- monitor_convergence(nbatch_values, blen_values, param_names, tandem = TRUE)
 
 
 
