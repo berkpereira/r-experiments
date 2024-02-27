@@ -48,49 +48,6 @@ polymod <- polymod_uk[,c(1,2)]
 polymod[,3] <- rowSums(polymod_uk[,c(3,4,5,6,7,8)])
 polymod[,4] <- polymod_uk[,9]
 
-# Initialize ili_df as a list
-# ili_df <- list()
-
-# Manipulate ili$ili according to the specifications with renamed columns
-# ili_df$ili <- ili$ili %>%
-#     transmute(
-#         Date = Date,
-#         `[0,13)` = rowSums(select(., `[0,2)`, `[2,5)`, `[5,13)`), na.rm = TRUE),
-#         `[13,65)` = rowSums(select(., `[13,17)`, `[17,45)`, `[45,65)`), na.rm = TRUE),
-#         `[65,+)` = `[65,+)`
-#     )
-
-# Manipulate ili$mon_pop according to the same specifications with renamed columns
-# ili_df$mon_pop <- ili$mon_pop %>%
-#     transmute(
-#         Date = Date,
-#         `[0,13)` = rowSums(select(., `[0,2)`, `[2,5)`, `[5,13)`), na.rm = TRUE),
-#         `[13,65)` = rowSums(select(., `[13,17)`, `[17,45)`, `[45,65)`), na.rm = TRUE),
-#         `[65,+)` = `[65,+)`
-#     )
-
-
-# Assuming viro_df is the desired result structure
-# viro_df <- list()
-
-# Manipulate viro$positive according to the specifications
-# viro_df$positive <- viro$positive %>%
-#     transmute(
-#         Date = Date,
-#         `[0,13)` = rowSums(select(., `[0,2)`, `[2,5)`, `[5,13)`), na.rm = TRUE),
-#         `[13,65)` = rowSums(select(., `[13,17)`, `[17,45)`, `[45,65)`), na.rm = TRUE),
-#         `[65,+)` = `[65,+)`
-#     )
-
-# Manipulate viro$total according to the same specifications
-# viro_df$total <- viro$total %>%
-#     transmute(
-#         Date = Date,
-#         `[0,13)` = rowSums(select(., `[0,2)`, `[2,5)`, `[5,13)`), na.rm = TRUE),
-#         `[13,65)` = rowSums(select(., `[13,17)`, `[17,45)`, `[45,65)`), na.rm = TRUE),
-#         `[65,+)` = `[65,+)`
-# )
-
 
 
 ################################################################################
@@ -146,8 +103,9 @@ baseline_coverage_matrix = rbind(c(0, 0, 0, 0, 0, 0),
                         c(0.166, 0.098, 0.266, 0.333, 0.491, 0.533))
 
 # VACCINE EFFICACY ASSUMPTIONS HELPED BY Baguelin2013.pdf, page 6
+baseline_vaccine_efficacy <- c(0.7, 0.7, 0.46, 0.7, 0.7, 0.46)
 vaccine_calendar <- as_vaccination_calendar(
-    efficacy = c(0.7, 0.7, 0.46, 0.7, 0.7, 0.46),
+    efficacy = baseline_vaccine_efficacy,
     coverage = as.data.frame(baseline_coverage_matrix),
     dates = baseline_dates_vector,
     no_age_groups = 3,
@@ -162,16 +120,23 @@ plot_coverage_time_series <- function(dates, coverage) {
     long_coverage_df <- reshape2::melt(coverage_df, id.vars = "Date", variable.name = "Series", value.name = "Coverage")
     
     # Plotting
-    ggplot(data = long_coverage_df, aes(x = Date, y = Coverage, color = Series)) +
+    p <- ggplot(data = long_coverage_df, aes(x = Date, y = Coverage, color = Series)) +
         geom_line() +
         geom_point() +
         theme_minimal() +
         labs(title = "Coverage Over Time", x = "Date", y = "Coverage (%)", color = "Series") +
         scale_y_continuous(labels = scales::percent_format(accuracy = 1)) # Display y-axis labels as percentages
+    
+    # Customize the date breaks and labels on the x-axis
+    p <- p + scale_x_date(date_breaks = "1 month", date_labels = "%b %d")
+    # Adjust the date_breaks and date_labels arguments according to your needs
+    # "%b %d" will format dates as 'Month day', e.g., 'Jan 01'
+    
+    print(p)
 }
 
 
-PLOT_COVERAGE <- F
+PLOT_COVERAGE <- T
 
 if (PLOT_COVERAGE) {
     plot_coverage_time_series(baseline_dates_vector, baseline_coverage_matrix)
@@ -239,7 +204,7 @@ ili$ili[true_indices[1],true_indices[2]] <- ili$ili[true_indices[1],true_indices
 # The model assumes that the virological samples are a subsample of patients diagnosed as ILI cases.
 # The ili counts should always be larger than or equal to n_samples
 
-RUNNING_INFERENCE = F
+RUNNING_INFERENCE = T
 
 
 if (RUNNING_INFERENCE) {
@@ -255,8 +220,8 @@ if (RUNNING_INFERENCE) {
                                    risk_group_map = risk_map,
                                    parameter_map = par_map,
                                    risk_ratios = risk_ratios,
-                                   nbatch = 10000,
-                                   nburn = 1000, blen = 10)
+                                   nbatch = 5000,
+                                   nburn = 1000, blen = 20)
 }
 
 
@@ -293,4 +258,5 @@ ggplot(batch_long, aes(x = Value)) +
 
 save(plot_coverage_time_series, strain, population, polymod,
      baseline_dates_vector, baseline_coverage_matrix,
-     risk_ratios, contacts, file = "inference-data-results.RData")
+     risk_ratios, contacts, inference_results, batch_tibble,
+     baseline_vaccine_efficacy, file = "inference-data-results.RData")
