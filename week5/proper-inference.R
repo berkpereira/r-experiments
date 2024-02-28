@@ -10,6 +10,7 @@ library(epiparameter)
 library(qs)
 library(ggplot2)
 library(tidyverse)
+library(beepr)
 
 
 data("demography")
@@ -139,7 +140,7 @@ plot_coverage_time_series <- function(dates, coverage) {
 
 
 
-PLOT_COVERAGE <- TRUE
+PLOT_COVERAGE <- FALSE
 
 if (PLOT_COVERAGE) {
     plot_coverage_time_series(baseline_dates_vector, baseline_coverage_matrix)
@@ -207,25 +208,25 @@ ili$ili[true_indices[1],true_indices[2]] <- ili$ili[true_indices[1],true_indices
 # The model assumes that the virological samples are a subsample of patients diagnosed as ILI cases.
 # The ili counts should always be larger than or equal to n_samples
 
-# RUNNING_INFERENCE = FALSE
-# 
-# 
-# if (RUNNING_INFERENCE) {
-#     inference_results <- inference(demography = demography,
-#                                    vaccine_calendar = vaccine_calendar,
-#                                    polymod_data = as.matrix(polymod),
-#                                    ili = ili$ili[,-1],
-#                                    mon_pop = ili$mon_pop[,-1],
-#                                    n_pos = viro$positive[,-1],
-#                                    n_samples = viro$total[,-1],
-#                                    initial = initial_pars,
-#                                    age_group_map = age_map,
-#                                    risk_group_map = risk_map,
-#                                    parameter_map = par_map,
-#                                    risk_ratios = risk_ratios,
-#                                    nbatch = 5000,
-#                                    nburn = 1000, blen = 20)
-# }
+RUNNING_INFERENCE = TRUE
+
+
+if (RUNNING_INFERENCE) {
+    inference_results <- inference(demography = demography,
+                                   vaccine_calendar = vaccine_calendar,
+                                   polymod_data = as.matrix(polymod),
+                                   ili = ili$ili[,-1],
+                                   mon_pop = ili$mon_pop[,-1],
+                                   n_pos = viro$positive[,-1],
+                                   n_samples = viro$total[,-1],
+                                   initial = initial_pars,
+                                   age_group_map = age_map,
+                                   risk_group_map = risk_map,
+                                   parameter_map = par_map,
+                                   risk_ratios = risk_ratios,
+                                   nbatch = 10000,
+                                   nburn = 2000, blen = 30)
+}
 
 
 
@@ -234,15 +235,15 @@ ili$ili[true_indices[1],true_indices[2]] <- ili$ili[true_indices[1],true_indices
 ################################################################################
 
 
-plot_param_hists <- function(inference_results_batch, all_params = FALSE) {
+plot_param_hists <- function(inference_results, all_params = FALSE) {
     # Convert the batch results to a tibble for better handling with tidyverse functions
-    batch_tibble <- as_tibble(inference_results_batch$batch)
+    batch_tibble <- as_tibble(inference_results$batch)
     
     # Check if all parameters should be included
     if (!all_params) {
         # If not all parameters, select only the specified parameters by their indices
         batch_tibble <- batch_tibble %>%
-            select(5, 6, 7, 8, 9)
+            select(5, 6, 7, 8)
     }
     
     # Pivot the data to a long format
@@ -250,7 +251,7 @@ plot_param_hists <- function(inference_results_batch, all_params = FALSE) {
         pivot_longer(cols = everything(), names_to = "Parameter", values_to = "Value")
     
     # Plot histograms for each parameter with adjusted layout if not all parameters are included
-    number_of_columns <- if (all_params) 3 else 3  # Adjust the number of columns based on the number of plots
+    number_of_columns <- if (all_params) 3 else 2  # Adjust the number of columns based on the number of plots
     
     ggplot(batch_long, aes(x = Value)) +
         geom_histogram(bins = 25, fill = "blue", color = "black") +
@@ -262,10 +263,10 @@ plot_param_hists <- function(inference_results_batch, all_params = FALSE) {
 
 
 
-PLOT_INFERENCE_RESULTS = FALSE
+PLOT_INFERENCE_RESULTS = TRUE
 
 if (PLOT_INFERENCE_RESULTS) {
-    plot_param_hists(inference_results_batch = inference_results$batch)
+    plot_param_hists(inference_results = inference_results)
 }
 
 
@@ -346,11 +347,11 @@ process_results <- function(inference_results, previous_means, iteration_info) {
 
 # Example usage
 
-MONITOR_CONVERGENCE = TRUE
+MONITOR_CONVERGENCE = FALSE
 
 if (MONITOR_CONVERGENCE) {
-    nbatch_values <- c(8000, 8000)
-    blen_values <- c(15, 15)
+    nbatch_values <- c(12000, 12000)
+    blen_values <- c(20, 20)
     param_names <- c("epsilon_1", "epsilon_2", "epsilon_3", "psi",
                      "transmissibility", "susceptibility_1", "susceptibility_2",
                      "susceptibility_3", "log_initial_infec")
@@ -379,3 +380,8 @@ if (SAVE_RESULTS) {
          risk_ratios, contacts, inference_results,
          baseline_vaccine_efficacy, file = "inference-data-results.RData")
 }
+
+
+
+
+beep(sound = "ping")
