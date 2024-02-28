@@ -234,22 +234,31 @@ ili$ili[true_indices[1],true_indices[2]] <- ili$ili[true_indices[1],true_indices
 ################################################################################
 
 
-plot_param_hists <- function(inference_results_batch) {
+plot_param_hists <- function(inference_results_batch, all_params = FALSE) {
     # Convert the batch results to a tibble for better handling with tidyverse functions
-    batch_tibble <- as_tibble(inference_results$batch)
+    batch_tibble <- as_tibble(inference_results_batch$batch)
     
+    # Check if all parameters should be included
+    if (!all_params) {
+        # If not all parameters, select only the specified parameters by their indices
+        batch_tibble <- batch_tibble %>%
+            select(5, 6, 7, 8, 9)
+    }
     
     # Pivot the data to a long format
     batch_long <- batch_tibble %>%
         pivot_longer(cols = everything(), names_to = "Parameter", values_to = "Value")
     
-    # Plot histograms for each parameter
+    # Plot histograms for each parameter with adjusted layout if not all parameters are included
+    number_of_columns <- if (all_params) 3 else 3  # Adjust the number of columns based on the number of plots
+    
     ggplot(batch_long, aes(x = Value)) +
         geom_histogram(bins = 25, fill = "blue", color = "black") +
-        facet_wrap(~ Parameter, ncol = 3, scales = "free") +
+        facet_wrap(~ Parameter, ncol = number_of_columns, scales = "free") +
         theme_minimal() +
         labs(x = "Parameter Value", y = "Frequency", title = "Histograms of Inference Parameters")
 }
+
 
 
 
