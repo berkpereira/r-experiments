@@ -358,6 +358,9 @@ if (MONITOR_CONVERGENCE) {
     inference_results <- monitor_convergence(nbatch_values,
                                              blen_values, param_names,
                                              tandem = TRUE)
+    
+    # PLOT POSTERIOR HISTS
+    plot_param_hists(inference_results)
 }
 
 

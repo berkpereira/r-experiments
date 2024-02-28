@@ -78,10 +78,11 @@ modify_coverage_data <- function(baseline_dates, baseline_coverage,
     if (uptake_speedup != 1 && length(baseline_dates) > 1) {
         # Calculate the differences between consecutive dates
         date_diffs <- diff(baseline_dates)
+        # Convert 'difftime' object to numeric days
+        date_diffs_days <- as.numeric(date_diffs, units = "days")
         # Adjust the gaps by the uptake_speedup factor
-        adjusted_diffs <- date_diffs / uptake_speedup
-        # Reconstruct the dates vector starting from the first date.
-        # I.e., the first date in the dates vector is unaffected.
+        adjusted_diffs <- date_diffs_days / uptake_speedup
+        # Reconstruct the dates vector starting from the first date
         adjusted_dates <- c(baseline_dates[1], baseline_dates[1] + cumsum(adjusted_diffs))
         baseline_dates <- adjusted_dates
     }
@@ -111,13 +112,15 @@ modify_coverage_data <- function(baseline_dates, baseline_coverage,
 
 
 
-coverage_scaling = 1.1
-vaccine_calendar_shift = 30
+coverage_scaling <- 1.5
+vaccine_calendar_shift <- 15
+calendar_speedup <- 1.5
 
 temp <- modify_coverage_data(baseline_dates_vector,
                              baseline_coverage_matrix,
                              coverage_scaling = coverage_scaling,
-                             start_date_shift = vaccine_calendar_shift)
+                             start_date_shift = vaccine_calendar_shift,
+                             uptake_speedup = calendar_speedup)
     
 new_dates_vector <- temp[[1]]
 new_coverage_matrix <- temp[[2]]
