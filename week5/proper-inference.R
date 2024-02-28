@@ -268,14 +268,15 @@ if (PLOT_INFERENCE_RESULTS) {
 # ANALYSE CONVERGENCE OF MCMC INFERENCE RESULTS
 ################################################################################
 
-
 monitor_convergence <- function(nbatch_values, blen_values, param_names, tandem = TRUE) {
     
     # Initialize an empty list to store results for comparison
     previous_means <- NULL
     
     cat(rep("-", 100), sep="", collapse="")
-    cat("\n") # Move to the next line after printing the dashes
+    cat("\n")
+    cat(rep("-", 100), sep="", collapse="")
+    cat("\n")
     
     if (tandem) {
         # Tandem is TRUE: vary nbatch and blen together
@@ -295,7 +296,9 @@ monitor_convergence <- function(nbatch_values, blen_values, param_names, tandem 
         }
     }
     cat(rep("-", 100), sep="", collapse="")
-    cat("\n") # Move to the next line after printing the dashes
+    cat("\n")
+    cat(rep("-", 100), sep="", collapse="")
+    cat("\n")
     
     # RETURN THE LAST SET OF INFERENCE RESULTS
     return(inference_results)
@@ -315,7 +318,7 @@ run_inference <- function(nbatch, blen) {
               parameter_map = par_map,
               risk_ratios = risk_ratios,
               nbatch = nbatch,
-              nburn = 1000, blen = blen)
+              nburn = 1500, blen = blen)
 }
 
 process_results <- function(inference_results, previous_means, iteration_info) {
@@ -333,13 +336,22 @@ process_results <- function(inference_results, previous_means, iteration_info) {
 
 
 # Example usage
-nbatch_values <- c(1000, 2000, 5000)
-blen_values <- c(5, 5, 5)
-param_names <- c("epsilon_1", "epsilon_2", "epsilon_3", "psi",
-                 "transmissibility", "susceptibility_1", "susceptibility_2",
-                 "susceptibility_3", "log_initial_infec")
 
-inference_results <- monitor_convergence(nbatch_values, blen_values, param_names, tandem = TRUE)
+MONITOR_CONVERGENCE = TRUE
+
+if (MONITOR_CONVERGENCE) {
+    nbatch_values <- c(8000, 8000)
+    blen_values <- c(15, 15)
+    param_names <- c("epsilon_1", "epsilon_2", "epsilon_3", "psi",
+                     "transmissibility", "susceptibility_1", "susceptibility_2",
+                     "susceptibility_3", "log_initial_infec")
+    
+    inference_results <- monitor_convergence(nbatch_values,
+                                             blen_values, param_names,
+                                             tandem = TRUE)
+}
+
+
 
 
 
@@ -347,11 +359,11 @@ inference_results <- monitor_convergence(nbatch_values, blen_values, param_names
 # SAVE SOME OF THE OUTPUT OF THIS SCRIPT
 ################################################################################
 
-SAVE_RESULTS <- F
+SAVE_RESULTS <- FALSE
 
 if (SAVE_RESULTS) {
-    save(plot_coverage_time_series, strain, population, polymod,
+    save(plot_coverage_time_series, plot_param_hists, strain, population, polymod,
          baseline_dates_vector, baseline_coverage_matrix,
-         risk_ratios, contacts, inference_results, batch_tibble,
+         risk_ratios, contacts, inference_results,
          baseline_vaccine_efficacy, file = "inference-data-results.RData")
 }

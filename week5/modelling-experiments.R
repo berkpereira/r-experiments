@@ -60,7 +60,8 @@ if (PLOT_COVERAGE) {
 
 
 modify_coverage_data <- function(baseline_dates, baseline_coverage,
-                                 start_date_shift = 0, coverage_scaling = 1) {
+                                 start_date_shift = 0, coverage_scaling = 1,
+                                 uptake_speedup = 1) {
     # Check if coverage_scaling is within the valid range
     max_coverage_value <- max(baseline_coverage)
     if(coverage_scaling <= 0 || coverage_scaling > 1 / max_coverage_value) {
@@ -73,7 +74,19 @@ modify_coverage_data <- function(baseline_dates, baseline_coverage,
     # Convert baseline_dates to Date class if not already
     baseline_dates <- as.Date(baseline_dates)
     
-    # Shift the baseline dates
+    # Adjust dates for uptake speedup before shifting
+    if (uptake_speedup != 1 && length(baseline_dates) > 1) {
+        # Calculate the differences between consecutive dates
+        date_diffs <- diff(baseline_dates)
+        # Adjust the gaps by the uptake_speedup factor
+        adjusted_diffs <- date_diffs / uptake_speedup
+        # Reconstruct the dates vector starting from the first date.
+        # I.e., the first date in the dates vector is unaffected.
+        adjusted_dates <- c(baseline_dates[1], baseline_dates[1] + cumsum(adjusted_diffs))
+        baseline_dates <- adjusted_dates
+    }
+    
+    # Shift the adjusted dates
     new_dates <- baseline_dates + start_date_shift
     
     # If start_date_shift is not zero, add an extra date and a row of zeros
@@ -94,6 +107,7 @@ modify_coverage_data <- function(baseline_dates, baseline_coverage,
     # Return a list containing the modified date vector and coverage matrix
     return(list(new_dates, new_coverage))
 }
+
 
 
 
