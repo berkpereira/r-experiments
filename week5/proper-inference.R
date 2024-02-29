@@ -116,7 +116,13 @@ vaccine_calendar <- as_vaccination_calendar(
 plot_coverage_time_series <- function(dates, coverage) {
     # Convert the coverage matrix to a long format data frame suitable for ggplot2
     coverage_df <- as.data.frame(coverage)
-    names(coverage_df) <- paste("Series", 1:ncol(coverage_df), sep = "_")
+    names(coverage_df) <- c("Low Risk [0,15)",
+                            "Low Risk [15,65)",
+                            "Low Risk [65,+)",
+                            "High Risk [0,15)",
+                            "High Risk [15,65)",
+                            "High Risk [65,+)")
+    
     coverage_df$Date <- dates
     long_coverage_df <- reshape2::melt(coverage_df, id.vars = "Date", variable.name = "Series", value.name = "Coverage")
     
@@ -208,7 +214,7 @@ ili$ili[true_indices[1],true_indices[2]] <- ili$ili[true_indices[1],true_indices
 # The model assumes that the virological samples are a subsample of patients diagnosed as ILI cases.
 # The ili counts should always be larger than or equal to n_samples
 
-RUNNING_INFERENCE = TRUE
+RUNNING_INFERENCE = FALSE
 
 
 if (RUNNING_INFERENCE) {

@@ -4,13 +4,20 @@
 library(fluEvidenceSynthesis)
 library(pander)
 library(ggplot2)
+library(reshape2)
 library(dplyr)
 library(tidyr)
 library(epiparameter)
 library(qs)
+library(ggplot2)
+library(tidyverse)
+library(beepr)
 
 data(polymod_uk)
 data(demography)
+
+
+
 
 
 ####################################################################################
@@ -18,23 +25,54 @@ data(demography)
 ####################################################################################
 
 # load("inference-data-results.RData")
+
 load("GOOD-INFERENCE.RData")
+batch_tibble <- as_tibble(inference_results$batch) # just casting to a more conveniently structured object
+mean_inferred_params <- sapply(batch_tibble, mean)
 
 
-run_model <- function(population, initial_infected, vaccine_calendar, contacts, 
-                               susceptibility, transmissibility, infection_delays, interval) {
+# Values below taken from Baguelin 2013, page 6
+# In DAYS
+T_latent <- 2 / 2.5
+T_infectious <- 2 / 1.1
+
+
+
+
+####################################################################################
+# REDEFINE THIS TO HAVE PROPER SERIES LABELS
+####################################################################################
+
+
+plot_coverage_time_series <- function(dates, coverage) {
+    # Convert the coverage matrix to a long format data frame suitable for ggplot2
+    coverage_df <- as.data.frame(coverage)
+    names(coverage_df) <- c("Low Risk [0,15)",
+                            "Low Risk [15,65)",
+                            "Low Risk [65,+)",
+                            "High Risk [0,15)",
+                            "High Risk [15,65)",
+                            "High Risk [65,+)")
     
-    # Run model and store results
-    odes <- infectionODEs( population, initial_infected, vaccine_calendar, contacts, 
-                           susceptibility, transmissibility, infection_delays, interval)
+    coverage_df$Date <- dates
+    long_coverage_df <- reshape2::melt(coverage_df, id.vars = "Date", variable.name = "Series", value.name = "Coverage")
     
-    # Compute fraction of each subpopulation that is infective at any point in time
-    fraction.infected <- odes %>%
-        gather(Group, Incidence, -Time) %>%
-        mutate(fraction = Incidence/population[Group])
+    # Plotting
+    p <- ggplot(data = long_coverage_df, aes(x = Date, y = Coverage, color = Series)) +
+        geom_line() +
+        geom_point() +
+        theme_minimal() +
+        labs(title = "Coverage Over Time", x = "Date", y = "Coverage (%)", color = "Series") +
+        scale_y_continuous(labels = scales::percent_format(accuracy = 1)) # Display y-axis labels as percentages
     
-    return(odes)
+    # Customize the date breaks and labels on the x-axis
+    p <- p + scale_x_date(date_breaks = "1 month", date_labels = "%b %d")
+    # Adjust the date_breaks and date_labels arguments according to your needs
+    # "%b %d" will format dates as 'Month day', e.g., 'Jan 01'
+    
+    print(p)
 }
+
 
 
 ####################################################################################
@@ -49,8 +87,12 @@ interval <- 7
 # INITIAL INFECTED
 ####################################################################################
 
-ag <- c(10 ^ 1.5, 10 ^ 1.5)
-initial_infected <- stratify_by_risk( ag, matrix(c(0.01,0.4),nrow=1)) # c(990, 600, 10, 400)
+# same in all age groups
+ag <- rep(10^3, 3)
+
+# for each age group, distribute initial cases uniformly across risk groups.
+# i.e., risk groups play no role in distributing initial infections.
+initial_infected <- stratify_by_risk(ag, matrix(risk_ratios,nrow=1))
 
 
 
@@ -58,7 +100,7 @@ initial_infected <- stratify_by_risk( ag, matrix(c(0.01,0.4),nrow=1)) # c(990, 6
 # VACCINE CALENDAR
 ####################################################################################
 
-PLOT_COVERAGE <- T
+PLOT_COVERAGE <- FALSE
 
 if (PLOT_COVERAGE) {
     plot_coverage_time_series(baseline_dates_vector, baseline_coverage_matrix)
@@ -116,28 +158,6 @@ modify_coverage_data <- function(baseline_dates, baseline_coverage,
 }
 
 
-
-
-coverage_scaling <- 1.5
-vaccine_calendar_shift <- 15
-calendar_speedup <- 1.5
-
-temp <- modify_coverage_data(baseline_dates_vector,
-                             baseline_coverage_matrix,
-                             coverage_scaling = coverage_scaling,
-                             start_date_shift = vaccine_calendar_shift,
-                             uptake_speedup = calendar_speedup)
-    
-new_dates_vector <- temp[[1]]
-new_coverage_matrix <- temp[[2]]
-
-
-new_vaccine_calendar <- as_vaccination_calendar(efficacy = baseline_vaccine_efficacy,
-                                                dates = new_dates_vector,
-                                                coverage = new_coverage_matrix,
-                                                no_age_groups = 3,
-                                                no_risk_groups = 2)
-
 if (PLOT_COVERAGE) {
     plot_coverage_time_series(new_dates_vector, new_coverage_matrix)
 }
@@ -160,19 +180,113 @@ infection_delays <- c( 0.8, 1.8 )
 
 
 ####################################################################################
+# DEFINE PLOTTING FUNCTIONS
+####################################################################################
+normalise_odes <- function(odes, population_vector) {
+    normalised_odes <- odes
+    for(col_name in names(population_vector)) {
+        normalised_odes[[col_name]] <- odes[[col_name]] / population_vector[col_name]
+    }
+    return(normalised_odes)
+}
+
+
+
+plot_odes <- function(odes, normalised=FALSE) {
+    # Melt the data frames for ggplot
+    odes_long <- melt(odes, id.vars = "Time", variable.name = "Group", value.name = "Cases")
+    
+    # Plot raw numbers
+    if (!normalised) {
+        ggplot(odes_long, aes(x = Time, y = Cases, color = Group)) +
+            geom_line() +
+            labs(title = "Weekly New Infection Cases by Group", x = "Week", y = "Number of Cases") +
+            theme_minimal()
+    } else {
+        ggplot(odes_long, aes(x = Time, y = Cases, color = Group)) +
+            geom_line() +
+            labs(title = "Weekly New Infection Cases by Group, Normalised", x = "Week", y = "Newly Infected Fraction of Group") +
+            theme_minimal()
+    }
+    
+}
+
+
+
+
+
+####################################################################################
 # ITERATE OVER PARAMETER VALUES
 ####################################################################################
 
-# Define a range of transmissibility values to iterate over
-vaccine_delays_seq <- seq(0,30, by=6)
-vaccine_uptake
+
+PLOT_CASE_SERIES <- TRUE
+
+
+
+# Define a range of vaccine calendar changes to iterate over
+vaccine_delays   <- seq(from = 0, to = 30, length.out = 7)
+vaccine_scalings <- seq(from = 1, to = 1, length.out = 7)
+vaccine_speedups <- seq(from = 1, to = 1, length.out = 7)
+
+# Iterate over the index range of vaccine_delays
+for(i in 1:length(vaccine_delays)) {
+    # Access each element by its index
+    
+    cov_scaling      <- vaccine_scalings[i]
+    delay            <- vaccine_delays[i]
+    calendar_speedup <- vaccine_speedups[i]
+    
+    temp <- modify_coverage_data(baseline_dates_vector,
+                                 baseline_coverage_matrix,
+                                 coverage_scaling = cov_scaling,
+                                 start_date_shift = delay,
+                                 uptake_speedup = calendar_speedup)
+    
+    new_dates_vector <- temp[[1]]
+    new_coverage_matrix <- temp[[2]]
+    
+    new_calendar <- as_vaccination_calendar(efficacy = baseline_vaccine_efficacy,
+                                            dates = new_dates_vector,
+                                            coverage = new_coverage_matrix,
+                                            no_risk_groups = 2,
+                                            no_age_groups = 3)
+    
+    plot_coverage_time_series(new_dates_vector, new_coverage_matrix)
+    
+    
+    # RUN MODEL
+    odes <- infectionODEs(population = population,
+                          initial_infected = initial_infected,
+                          vaccine_calendar = new_calendar,
+                          contact_matrix = contacts,
+                          susceptibility = c(mean_inferred_params['susceptibility_1'], mean_inferred_params['susceptibility_2'], mean_inferred_params['susceptibility_3']),
+                          transmissibility = mean_inferred_params['transmissibility'],
+                          infection_delays = c(T_latent, T_infectious),
+                          interval = 7)
+    
+    
+    normalised_odes <- normalise_odes(odes, population)
+    
+    print(plot_odes(normalised_odes, normalised=TRUE))
+}
 
 
 
 
 
 
-# Save the plot to a PDF file
-#ggsave("output.pdf", plot = plot_object, width = 7, height = 5)
+
+
+####################################################################################
+# SAVE PLOT TO PDF
+####################################################################################
+
+SAVE_PLOT = FALSE
+
+if (SAVE_PLOT) {
+    ggsave("output.pdf", plot = plot_object, width = 7, height = 5)
+}
+
 
 
