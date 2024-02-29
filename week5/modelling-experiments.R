@@ -12,7 +12,13 @@ library(qs)
 data(polymod_uk)
 data(demography)
 
-load("inference-data-results.RData")
+
+####################################################################################
+# LOAD DATA
+####################################################################################
+
+# load("inference-data-results.RData")
+load("GOOD-INFERENCE.RData")
 
 
 run_model <- function(population, initial_infected, vaccine_calendar, contacts, 
@@ -158,7 +164,8 @@ infection_delays <- c( 0.8, 1.8 )
 ####################################################################################
 
 # Define a range of transmissibility values to iterate over
-transmissibility_values <- seq(0.12, 0.16, by = 0.01) 
+vaccine_delays_seq <- seq(0,30, by=6)
+vaccine_uptake
 
 
 
