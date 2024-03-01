@@ -66,47 +66,69 @@ T_infectious <- 2 / 1.1
 ####################################################################################
 
 
+age_group_colours <- c("[0,15)" = "#377eb8", "[15,65)" = "#ff7f00", "[65,+)" = "#4daf4a")
+risk_group_shapes <- c("Low Risk" = 16, "High Risk" = 17)  # 16 = circle, 17 = triangle
+marker_size <- 2
+
+
+
 plot_coverage_time_series <- function(dates, coverage, delay=NULL, speedup=NULL, cutoff_date=NULL) {
     coverage_df <- as.data.frame(coverage)
     colnames(coverage_df) <- c("Low Risk [0,15)", "Low Risk [15,65)", "Low Risk [65,+)",
                                "High Risk [0,15)", "High Risk [15,65)", "High Risk [65,+)")
     coverage_df$Date <- dates
     
+    # Check and process cutoff_date if provided
+    if (!is.null(cutoff_date)) {
+        cutoff_date <- as.Date(cutoff_date)
+        if(cutoff_date < min(dates)) {
+            stop("cutoff_date cannot be earlier than any date in the dates vector.")
+        }
+        
+        # Append a new row with the cutoff_date and the last values if cutoff_date is after the last date
+        if(cutoff_date > max(dates)) {
+            last_values <- tail(coverage_df, 1)[,-ncol(coverage_df)]
+            new_row <- cbind(Date = cutoff_date, last_values)
+            coverage_df <- rbind(coverage_df, new_row)
+        }
+    }
+    
     long_coverage_df <- reshape2::melt(coverage_df, id.vars = "Date", variable.name = "Series", value.name = "Coverage")
+    long_coverage_df$AgeGroup <- sub(".*(\\[.*\\)).*", "\\1", long_coverage_df$Series)
     long_coverage_df$RiskGroup <- ifelse(grepl("Low Risk", long_coverage_df$Series), "Low Risk", "High Risk")
     
-    ggplot(long_coverage_df, aes(x = Date, y = Coverage, color = Series, shape = RiskGroup)) +
-        geom_line() + 
-        geom_point() + 
-        scale_shape_manual(values = c("Low Risk" = 16, "High Risk" = 17)) +  # Change these values as desired
+    ggplot(long_coverage_df, aes(x = Date, y = Coverage, color = AgeGroup, shape = RiskGroup)) +
+        geom_line(aes(group = Series)) + 
+        geom_point(size = 3) + 
+        scale_color_manual(values = age_group_colours) +
+        scale_shape_manual(values = risk_group_shapes) +
         scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
         scale_x_date(limits = c(min(dates), ifelse(is.null(cutoff_date), max(dates), cutoff_date)), 
                      date_breaks = "1 month", date_labels = "%b") +
         labs(title = paste("Vaccine Coverage Over Time", ifelse(!is.null(delay) && !is.null(speedup), 
                                                                 paste("\nDelay:", delay, "days, Speedup:", speedup), 
                                                                 "")), 
-             x = "Date", y = "Coverage (%)", color = "Series") +
+             x = "Date", y = "Coverage (%)") +
         theme_minimal() +
         theme(plot.title = element_text(hjust = 0.5),  
               axis.text.x = element_text(angle = 45, hjust = 1))
 }
 
-
-
-
-plot_odes <- function(odes, normalised=FALSE, delay=NULL,
-                      calendar_speedup=NULL, cutoff_date=NULL, y_max=NULL, labs=TRUE) {
+# Adjust plot_odes function
+plot_odes <- function(odes, normalised=FALSE, delay=NULL, calendar_speedup=NULL, cutoff_date=NULL, y_max=NULL, labs=TRUE) {
     odes_long <- melt(odes, id.vars = "Time", variable.name = "Group", value.name = "Cases")
     
-    # Assuming the 'Group' column correctly identifies each group as belonging to either
-    # "Low Risk" or "High Risk" category based on the group names.
-    # You may need to adjust the grepl patterns according to the exact naming convention in your data.
+    # Extract age group and risk group from the 'Group' column
+
+
+    odes_long$AgeGroup <- sub(".*(\\[.*\\)).*", "\\1", odes_long$Group)
     odes_long$RiskGroup <- ifelse(grepl("LowRisk", odes_long$Group), "Low Risk", "High Risk")
     
-    p <- ggplot(odes_long, aes(x = Time, y = Cases, color = Group, shape = RiskGroup)) +
-        geom_line() +
-        geom_point() +
-        scale_shape_manual(values = c("Low Risk" = 16, "High Risk" = 17)) +  # Customize markers
+    p <- ggplot(odes_long, aes(x = Time, y = Cases, color = AgeGroup, shape = RiskGroup)) +
+        geom_line(aes(group = Group)) +
+        geom_point(size = marker_size) +
+        scale_color_manual(values = age_group_colours) +
+        scale_shape_manual(values = risk_group_shapes) +
         labs(title = paste("Weekly New Infections,", if(normalised) {"Normalised"} else {""}, "\n", 
                            if(!is.null(delay) && !is.null(calendar_speedup)) {
                                paste("Delay:", delay, "days, Speedup:", calendar_speedup)
