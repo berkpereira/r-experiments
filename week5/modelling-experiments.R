@@ -19,6 +19,9 @@ data(demography)
 
 
 
+PLOT_WIDTH <- 4
+PLOT_HEIGHT <- 4.5
+
 
 ####################################################################################
 # LOAD DATA
@@ -44,7 +47,7 @@ T_infectious <- 2 / 1.1
 ####################################################################################
 
 
-plot_coverage_time_series <- function(dates, coverage) {
+plot_coverage_time_series <- function(dates, coverage, delay=NULL, speedup=NULL) {
     # Convert the coverage matrix to a long format data frame suitable for ggplot2
     coverage_df <- as.data.frame(coverage)
     names(coverage_df) <- c("Low Risk [0,15)",
@@ -57,22 +60,56 @@ plot_coverage_time_series <- function(dates, coverage) {
     coverage_df$Date <- dates
     long_coverage_df <- reshape2::melt(coverage_df, id.vars = "Date", variable.name = "Series", value.name = "Coverage")
     
+    # Determine additional title text based on provided delay and speedup
+    additional_title <- ""
+    if (!is.null(delay)) {
+        additional_title <- paste(additional_title, "Delay:", delay, "days")
+    }
+    if (!is.null(speedup)) {
+        additional_title <- paste(additional_title, "Speedup:", speedup, "x")
+    }
+    full_title <- paste("Coverage Over Time", additional_title)
+    
     # Plotting
     p <- ggplot(data = long_coverage_df, aes(x = Date, y = Coverage, color = Series)) +
         geom_line() +
         geom_point() +
         theme_minimal() +
-        labs(title = "Coverage Over Time", x = "Date", y = "Coverage (%)", color = "Series") +
-        scale_y_continuous(labels = scales::percent_format(accuracy = 1)) # Display y-axis labels as percentages
-    
-    # Customize the date breaks and labels on the x-axis
-    p <- p + scale_x_date(date_breaks = "1 month", date_labels = "%b %d")
-    # Adjust the date_breaks and date_labels arguments according to your needs
-    # "%b %d" will format dates as 'Month day', e.g., 'Jan 01'
+        labs(title = full_title, x = "Date", y = "Coverage (%)", color = "Series") +
+        scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+        scale_x_date(date_breaks = "2 months", date_labels = "%b") +  # Only show month name
+        theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8))  # Rotate and adjust size of tick labels
     
     print(p)
 }
 
+
+
+
+plot_param_hists <- function(inference_results, all_params = FALSE) {
+    # Convert the batch results to a tibble for better handling with tidyverse functions
+    batch_tibble <- as_tibble(inference_results$batch)
+    
+    # Check if all parameters should be included
+    if (!all_params) {
+        # If not all parameters, select only the specified parameters by their indices
+        batch_tibble <- batch_tibble %>%
+            select(5, 6, 7, 8)
+    }
+    
+    # Pivot the data to a long format
+    batch_long <- batch_tibble %>%
+        pivot_longer(cols = everything(), names_to = "Parameter", values_to = "Value")
+    
+    # Plot histograms for each parameter with adjusted layout if not all parameters are included
+    number_of_columns <- if (all_params) 3 else 2  # Adjust the number of columns based on the number of plots
+    
+    ggplot(batch_long, aes(x = Value)) +
+        geom_histogram(bins = 25, fill = "blue", color = "black") +
+        facet_wrap(~ Parameter, ncol = number_of_columns, scales = "free") +
+        theme_minimal() +
+        labs(x = "Parameter Value", y = "Frequency", title = "Histograms of Infererred Parameters")
+}
 
 
 ####################################################################################
@@ -195,7 +232,8 @@ normalise_odes <- function(odes, population_vector) {
 
 
 
-plot_odes <- function(odes, normalised=FALSE, delay=NULL, calendar_speedup=NULL, cutoff_date=NULL, y_max=NULL) {
+plot_odes <- function(odes, normalised=FALSE, delay=NULL,
+                      calendar_speedup=NULL, cutoff_date=NULL, y_max=NULL, labs=TRUE) {
     # Melt the data frames for ggplot
     odes_long <- melt(odes, id.vars = "Time", variable.name = "Group", value.name = "Cases")
     
@@ -226,8 +264,15 @@ plot_odes <- function(odes, normalised=FALSE, delay=NULL, calendar_speedup=NULL,
         p <- p + scale_y_continuous(limits = c(NA, y_max))
     }
     
+    # Conditionally remove the legend if labs is FALSE
+    if (!labs) {
+        p <- p + theme(legend.position = "none") +
+            theme(plot.margin = unit(c(1,1,1,1), "lines"))  # Adjust plot margins
+    }
+    
     print(p)
 }
+
 
 
 
@@ -248,7 +293,7 @@ PLOT_CASE_SERIES <- TRUE
 
 
 # Define a range of vaccine calendar changes to iterate over
-vaccine_scalings <- c(1, 1, 1)
+vaccine_scalings <- c(1, 1, 1, 1)
 
 vaccine_delays   <- c(0, 30, 0, 30)
 vaccine_speedups <- c(1, 1, 1.3, 1.3)
@@ -276,7 +321,12 @@ for(i in 1:length(vaccine_delays)) {
                                             no_risk_groups = 2,
                                             no_age_groups = 3)
     
-    # plot_coverage_time_series(new_dates_vector, new_coverage_matrix)
+    cov_plot <- plot_coverage_time_series(new_dates_vector, new_coverage_matrix)
+    print(cov_plot)
+    
+    cov_filename <- paste("coverage-delay", delay,
+                          "-speedup", calendar_speedup, ".pdf", sep = "")
+    ggsave(cov_filename, plot = cov_plot, width = PLOT_WIDTH, height = PLOT_HEIGHT)
     
     
     # RUN MODEL
@@ -294,9 +344,15 @@ for(i in 1:length(vaccine_delays)) {
     
     truncation_date = "2023-04-01"
     
-    print(plot_odes(normalised_odes, normalised=TRUE, delay=delay,
-                    calendar_speedup=calendar_speedup, cutoff_date = truncation_date,
-                    y_max=0.01))
+    cases_plot <- plot_odes(normalised_odes, normalised=TRUE, delay=delay,
+                            calendar_speedup=calendar_speedup, cutoff_date = truncation_date,
+                            y_max=0.009, labs = FALSE)
+    
+    print(cases_plot)
+    
+    cases_filename <- paste("cases-delay", delay,
+                            "-speedup", calendar_speedup, ".pdf", sep = "")
+    ggsave(cases_filename, plot = cases_plot, width = PLOT_WIDTH, height = PLOT_HEIGHT)
     
     # cases <- rowSums(vaccination_scenario(demography = demography,
     #                                       vaccine_calendar = new_calendar,
