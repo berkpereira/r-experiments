@@ -47,41 +47,46 @@ T_infectious <- 2 / 1.1
 ####################################################################################
 
 
-plot_coverage_time_series <- function(dates, coverage, delay=NULL, speedup=NULL) {
-    # Convert the coverage matrix to a long format data frame suitable for ggplot2
+plot_coverage_time_series <- function(dates, coverage, delay=NULL, speedup=NULL, cutoff_date=NULL) {
     coverage_df <- as.data.frame(coverage)
-    names(coverage_df) <- c("Low Risk [0,15)",
-                            "Low Risk [15,65)",
-                            "Low Risk [65,+)",
-                            "High Risk [0,15)",
-                            "High Risk [15,65)",
-                            "High Risk [65,+)")
-    
+    colnames(coverage_df) <- c("Low Risk [0,15)", "Low Risk [15,65)", "Low Risk [65,+)",
+                               "High Risk [0,15)", "High Risk [15,65)", "High Risk [65,+)")
     coverage_df$Date <- dates
+    
+    if (!is.null(cutoff_date)) {
+        cutoff_date <- as.Date(cutoff_date)
+        if(cutoff_date < min(dates)) {
+            stop("cutoff_date cannot be earlier than any date in the dates vector.")
+        }
+        
+        if(cutoff_date > max(dates)) {
+            last_row <- tail(coverage_df, 1)
+            last_row$Date <- cutoff_date
+            coverage_df <- rbind(coverage_df, last_row)
+        }
+    }
+    
     long_coverage_df <- reshape2::melt(coverage_df, id.vars = "Date", variable.name = "Series", value.name = "Coverage")
     
-    # Determine additional title text based on provided delay and speedup
-    additional_title <- ""
-    if (!is.null(delay)) {
-        additional_title <- paste(additional_title, "Delay:", delay, "days")
-    }
-    if (!is.null(speedup)) {
-        additional_title <- paste(additional_title, "Speedup:", speedup, "x")
-    }
-    full_title <- paste("Coverage Over Time", additional_title)
+    additional_title <- ifelse(!is.null(delay) && !is.null(speedup), 
+                               paste("\nDelay:", delay, "days, Speedup:", speedup), 
+                               "")
+    plot_title <- paste("Vaccine Coverage Over Time", additional_title)
     
-    # Plotting
-    p <- ggplot(data = long_coverage_df, aes(x = Date, y = Coverage, color = Series)) +
-        geom_line() +
-        geom_point() +
-        theme_minimal() +
-        labs(title = full_title, x = "Date", y = "Coverage (%)", color = "Series") +
+    ggplot(long_coverage_df, aes(x = Date, y = Coverage, color = Series)) +
+        geom_line() + geom_point() +
         scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
-        scale_x_date(date_breaks = "2 months", date_labels = "%b") +  # Only show month name
-        theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8))  # Rotate and adjust size of tick labels
-    
-    print(p)
+        scale_x_date(limits = c(min(dates), ifelse(is.null(cutoff_date), max(dates), cutoff_date)), 
+                     date_breaks = "1 month", date_labels = "%b") +
+        labs(title = plot_title, x = "Date", y = "Coverage (%)", color = "Series") +
+        theme_minimal() +
+        theme(plot.title = element_text(hjust = 0.5),  # Center-align the title
+              axis.text.x = element_text(angle = 45, hjust = 1))  # Align and rotate x-axis labels
 }
+
+
+
+
 
 
 
@@ -244,9 +249,8 @@ plot_odes <- function(odes, normalised=FALSE, delay=NULL,
     }
     
     # Dynamically generate the title based on delay and calendar_speedup
-    # Insert a newline character (\n) to split the title across two lines
-    title_text <- paste("Weekly New Infections",
-                        if(normalised) {", Normalised"} else {""}, "\n",
+    title_text <- paste("Weekly New Infections,",
+                        if(normalised) {"Normalised"} else {""}, "\n",
                         if(!is.null(delay) && !is.null(calendar_speedup)) {
                             paste("Delay:", delay, "days, Speedup:", calendar_speedup)
                         } else {""})
@@ -257,21 +261,16 @@ plot_odes <- function(odes, normalised=FALSE, delay=NULL,
         geom_point() +  # Add points at each data point
         labs(title = title_text, x = "Date", y = if(normalised) {"Newly Infected Fraction of Group"} else {"Number of Cases"}) +
         theme_minimal() +
-        theme(plot.title = element_text(hjust = 0.5))  # Center-align the title
-    
-    # Conditionally set the y-axis limit if y_max is provided
-    if (!is.null(y_max)) {
-        p <- p + scale_y_continuous(limits = c(NA, y_max))
-    }
-    
-    # Conditionally remove the legend if labs is FALSE
-    if (!labs) {
-        p <- p + theme(legend.position = "none") +
-            theme(plot.margin = unit(c(1,1,1,1), "lines"))  # Adjust plot margins
-    }
+        theme(plot.title = element_text(hjust = 0.5)) +  # Center-align the title
+        theme(legend.position = if(labs) "right" else "none") +  # Conditionally remove the legend if labs is FALSE
+        theme(plot.margin = unit(c(1,1,1,1), "lines")) +  # Adjust plot margins if legend is removed
+        scale_y_continuous(limits = c(NA, y_max)) +  # Conditionally set the y-axis limit if y_max is provided
+        scale_x_date(date_breaks = "1 month", date_labels = "%b") +  # Generate ticks for each month
+        theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 12))  # Apply 45-degree inclination to x-axis labels
     
     print(p)
 }
+
 
 
 
@@ -321,11 +320,22 @@ for(i in 1:length(vaccine_delays)) {
                                             no_risk_groups = 2,
                                             no_age_groups = 3)
     
-    cov_plot <- plot_coverage_time_series(new_dates_vector, new_coverage_matrix)
+    
+    
+    truncation_date = "2023-04-01"
+    
+    
+    
+    cov_plot <- plot_coverage_time_series(new_dates_vector, new_coverage_matrix,
+                                          cutoff_date = truncation_date,
+                                          delay = delay,
+                                          speedup = calendar_speedup)
     print(cov_plot)
     
     cov_filename <- paste("coverage-delay", delay,
                           "-speedup", calendar_speedup, ".pdf", sep = "")
+    
+    
     ggsave(cov_filename, plot = cov_plot, width = PLOT_WIDTH, height = PLOT_HEIGHT)
     
     
@@ -342,7 +352,7 @@ for(i in 1:length(vaccine_delays)) {
     
     normalised_odes <- normalise_odes(odes, population)
     
-    truncation_date = "2023-04-01"
+    
     
     cases_plot <- plot_odes(normalised_odes, normalised=TRUE, delay=delay,
                             calendar_speedup=calendar_speedup, cutoff_date = truncation_date,
