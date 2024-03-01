@@ -87,8 +87,11 @@ interval <- 7
 # INITIAL INFECTED
 ####################################################################################
 
-# same in all age groups
-ag <- rep(10^3, 3)
+# same proportion in all age groups.
+# E.g., this amounts to 10110 initial infected in the [15, 65) age group.
+ag <- 3e-4 * c(population[1] + population[4],
+               population[2] + population[5],
+               population[3] + population[6])
 
 # for each age group, distribute initial cases uniformly across risk groups.
 # i.e., risk groups play no role in distributing initial infections.
@@ -192,24 +195,44 @@ normalise_odes <- function(odes, population_vector) {
 
 
 
-plot_odes <- function(odes, normalised=FALSE) {
+plot_odes <- function(odes, normalised=FALSE, delay=NULL, calendar_speedup=NULL, cutoff_date=NULL, y_max=NULL) {
     # Melt the data frames for ggplot
     odes_long <- melt(odes, id.vars = "Time", variable.name = "Group", value.name = "Cases")
     
-    # Plot raw numbers
-    if (!normalised) {
-        ggplot(odes_long, aes(x = Time, y = Cases, color = Group)) +
-            geom_line() +
-            labs(title = "Weekly New Infection Cases by Group", x = "Week", y = "Number of Cases") +
-            theme_minimal()
-    } else {
-        ggplot(odes_long, aes(x = Time, y = Cases, color = Group)) +
-            geom_line() +
-            labs(title = "Weekly New Infection Cases by Group, Normalised", x = "Week", y = "Newly Infected Fraction of Group") +
-            theme_minimal()
+    # Filter the data if a cutoff_date is provided
+    if (!is.null(cutoff_date)) {
+        cutoff_date <- as.Date(cutoff_date)  # Ensure cutoff_date is in Date format
+        odes_long <- odes_long[odes_long$Time <= cutoff_date, ]
     }
     
+    # Dynamically generate the title based on delay and calendar_speedup
+    # Insert a newline character (\n) to split the title across two lines
+    title_text <- paste("Weekly New Infections",
+                        if(normalised) {", Normalised"} else {""}, "\n",
+                        if(!is.null(delay) && !is.null(calendar_speedup)) {
+                            paste("Delay:", delay, "days, Speedup:", calendar_speedup)
+                        } else {""})
+    
+    # Initialize ggplot object
+    p <- ggplot(odes_long, aes(x = Time, y = Cases, color = Group)) +
+        geom_line() +  # Draw lines connecting the points
+        geom_point() +  # Add points at each data point
+        labs(title = title_text, x = "Date", y = if(normalised) {"Newly Infected Fraction of Group"} else {"Number of Cases"}) +
+        theme_minimal() +
+        theme(plot.title = element_text(hjust = 0.5))  # Center-align the title
+    
+    # Conditionally set the y-axis limit if y_max is provided
+    if (!is.null(y_max)) {
+        p <- p + scale_y_continuous(limits = c(NA, y_max))
+    }
+    
+    print(p)
 }
+
+
+
+
+
 
 
 
@@ -225,9 +248,10 @@ PLOT_CASE_SERIES <- TRUE
 
 
 # Define a range of vaccine calendar changes to iterate over
-vaccine_delays   <- seq(from = 0, to = 30, length.out = 7)
-vaccine_scalings <- seq(from = 1, to = 1, length.out = 7)
-vaccine_speedups <- seq(from = 1, to = 1, length.out = 7)
+vaccine_scalings <- c(1, 1, 1)
+
+vaccine_delays   <- c(0, 30, 0, 30)
+vaccine_speedups <- c(1, 1, 1.3, 1.3)
 
 # Iterate over the index range of vaccine_delays
 for(i in 1:length(vaccine_delays)) {
@@ -252,7 +276,7 @@ for(i in 1:length(vaccine_delays)) {
                                             no_risk_groups = 2,
                                             no_age_groups = 3)
     
-    plot_coverage_time_series(new_dates_vector, new_coverage_matrix)
+    # plot_coverage_time_series(new_dates_vector, new_coverage_matrix)
     
     
     # RUN MODEL
@@ -268,7 +292,20 @@ for(i in 1:length(vaccine_delays)) {
     
     normalised_odes <- normalise_odes(odes, population)
     
-    print(plot_odes(normalised_odes, normalised=TRUE))
+    truncation_date = "2023-04-01"
+    
+    print(plot_odes(normalised_odes, normalised=TRUE, delay=delay,
+                    calendar_speedup=calendar_speedup, cutoff_date = truncation_date,
+                    y_max=0.01))
+    
+    # cases <- rowSums(vaccination_scenario(demography = demography,
+    #                                       vaccine_calendar = new_calendar,
+    #                                       polymod_data = polymod,
+    #                                       contact_ids = inference_results$contact.ids,
+    #                                       parameters = inference_results$batch,
+    #                                       verbose = F))
+    # cases_df <- data.frame(value = cases, scenario = "Original")
+    # ggplot(data = cases_df) + geom_histogram(aes(x = value), bins = 25)
 }
 
 

@@ -70,22 +70,21 @@ class SEIRModel(BaseModel):
         return [dSdt, dEdt, dIdt, dRdt]
 
 class SEEIIRModel(BaseModel):
-    def __init__(self, beta, sigma, gamma, mu, S0, E1_0, E2_0, I1_0, I2_0, R1_0, R2_0):
-        parameters = {'beta': beta, 'sigma': sigma, 'gamma': gamma, 'mu': mu}
-        initial_conditions = [S0, E1_0, E2_0, I1_0, I2_0, R1_0, R2_0]
+    def __init__(self, beta, sigma, gamma, S0, E1_0, E2_0, I1_0, I2_0, R_0):
+        parameters = {'beta': beta, 'sigma': sigma, 'gamma': gamma}
+        initial_conditions = [S0, E1_0, E2_0, I1_0, I2_0, R_0]
         super().__init__(initial_conditions, parameters)
 
     def model_equations(self, t, y, parameters):
-        S, E1, E2, I1, I2, R1, R2 = y
-        beta, sigma, gamma, mu = parameters.values()
+        S, E1, E2, I1, I2, R = y
+        beta, sigma, gamma = parameters.values()
         dSdt = -beta * S * (I1 + I2)
         dE1dt = beta * S * (I1 + I2) - sigma * E1
         dE2dt = sigma * E1 - sigma * E2
         dI1dt = sigma * E2 - gamma * I1
-        dI2dt = mu * I1 - gamma * I2
-        dR1dt = (1 - mu) * I1 + gamma * I2
-        dR2dt = gamma * I2
-        return [dSdt, dE1dt, dE2dt, dI1dt, dI2dt, dR1dt, dR2dt]
+        dI2dt = gamma * I1 - gamma * I2
+        dRdt = gamma * (I1 + I2)
+        return [dSdt, dE1dt, dE2dt, dI1dt, dI2dt, dRdt]
 
 if __name__ == '__main__':
     # Example usage for SEIRModel
