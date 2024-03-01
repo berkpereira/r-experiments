@@ -34,6 +34,25 @@ batch_tibble <- as_tibble(inference_results$batch) # just casting to a more conv
 mean_inferred_params <- sapply(batch_tibble, mean)
 
 
+strain <- "H3N2"
+
+all_data <- qread("2017-18_EN_viro_ili.qs")
+if (strain == "H3N2") {
+    infer_data <- all_data$H3N2
+} else if (strain == "B") {
+    infer_data <- all_data$B
+} else if (strain == "H1N1") {
+    infer_data <- all_data$H1N1
+} else {
+    stop("Invalid strain. Choose either H3N2, B, or H1N1.")
+}
+
+ili <- infer_data$ili
+viro <- infer_data$viro
+
+
+
+
 # Values below taken from Baguelin 2013, page 6
 # In DAYS
 T_latent <- 2 / 2.5
@@ -53,36 +72,57 @@ plot_coverage_time_series <- function(dates, coverage, delay=NULL, speedup=NULL,
                                "High Risk [0,15)", "High Risk [15,65)", "High Risk [65,+)")
     coverage_df$Date <- dates
     
-    if (!is.null(cutoff_date)) {
-        cutoff_date <- as.Date(cutoff_date)
-        if(cutoff_date < min(dates)) {
-            stop("cutoff_date cannot be earlier than any date in the dates vector.")
-        }
-        
-        if(cutoff_date > max(dates)) {
-            last_row <- tail(coverage_df, 1)
-            last_row$Date <- cutoff_date
-            coverage_df <- rbind(coverage_df, last_row)
-        }
-    }
-    
     long_coverage_df <- reshape2::melt(coverage_df, id.vars = "Date", variable.name = "Series", value.name = "Coverage")
+    long_coverage_df$RiskGroup <- ifelse(grepl("Low Risk", long_coverage_df$Series), "Low Risk", "High Risk")
     
-    additional_title <- ifelse(!is.null(delay) && !is.null(speedup), 
-                               paste("\nDelay:", delay, "days, Speedup:", speedup), 
-                               "")
-    plot_title <- paste("Vaccine Coverage Over Time", additional_title)
-    
-    ggplot(long_coverage_df, aes(x = Date, y = Coverage, color = Series)) +
-        geom_line() + geom_point() +
+    ggplot(long_coverage_df, aes(x = Date, y = Coverage, color = Series, shape = RiskGroup)) +
+        geom_line() + 
+        geom_point() + 
+        scale_shape_manual(values = c("Low Risk" = 16, "High Risk" = 17)) +  # Change these values as desired
         scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
         scale_x_date(limits = c(min(dates), ifelse(is.null(cutoff_date), max(dates), cutoff_date)), 
                      date_breaks = "1 month", date_labels = "%b") +
-        labs(title = plot_title, x = "Date", y = "Coverage (%)", color = "Series") +
+        labs(title = paste("Vaccine Coverage Over Time", ifelse(!is.null(delay) && !is.null(speedup), 
+                                                                paste("\nDelay:", delay, "days, Speedup:", speedup), 
+                                                                "")), 
+             x = "Date", y = "Coverage (%)", color = "Series") +
+        theme_minimal() +
+        theme(plot.title = element_text(hjust = 0.5),  
+              axis.text.x = element_text(angle = 45, hjust = 1))
+}
+
+
+
+
+plot_odes <- function(odes, normalised=FALSE, delay=NULL,
+                      calendar_speedup=NULL, cutoff_date=NULL, y_max=NULL, labs=TRUE) {
+    odes_long <- melt(odes, id.vars = "Time", variable.name = "Group", value.name = "Cases")
+    
+    # Assuming the 'Group' column correctly identifies each group as belonging to either
+    # "Low Risk" or "High Risk" category based on the group names.
+    # You may need to adjust the grepl patterns according to the exact naming convention in your data.
+    odes_long$RiskGroup <- ifelse(grepl("LowRisk", odes_long$Group), "Low Risk", "High Risk")
+    
+    p <- ggplot(odes_long, aes(x = Time, y = Cases, color = Group, shape = RiskGroup)) +
+        geom_line() +
+        geom_point() +
+        scale_shape_manual(values = c("Low Risk" = 16, "High Risk" = 17)) +  # Customize markers
+        labs(title = paste("Weekly New Infections,", if(normalised) {"Normalised"} else {""}, "\n", 
+                           if(!is.null(delay) && !is.null(calendar_speedup)) {
+                               paste("Delay:", delay, "days, Speedup:", calendar_speedup)
+                           } else {""}),
+             x = "Date", y = if(normalised) {"Newly Infected Fraction of Group"} else {"Number of Cases"}) +
         theme_minimal() +
         theme(plot.title = element_text(hjust = 0.5),  # Center-align the title
-              axis.text.x = element_text(angle = 45, hjust = 1))  # Align and rotate x-axis labels
+              legend.position = if(labs) "right" else "none",  # Conditionally remove the legend if labs is FALSE
+              axis.text.x = element_text(angle = 45, hjust = 1)) +  # Apply 45-degree inclination to x-axis labels
+        scale_y_continuous(limits = c(NA, y_max)) +
+        scale_x_date(date_breaks = "1 month", date_labels = "%b")  # Generate ticks for each month
+    
+    print(p)
 }
+
+
 
 
 
@@ -237,48 +277,6 @@ normalise_odes <- function(odes, population_vector) {
 
 
 
-plot_odes <- function(odes, normalised=FALSE, delay=NULL,
-                      calendar_speedup=NULL, cutoff_date=NULL, y_max=NULL, labs=TRUE) {
-    # Melt the data frames for ggplot
-    odes_long <- melt(odes, id.vars = "Time", variable.name = "Group", value.name = "Cases")
-    
-    # Filter the data if a cutoff_date is provided
-    if (!is.null(cutoff_date)) {
-        cutoff_date <- as.Date(cutoff_date)  # Ensure cutoff_date is in Date format
-        odes_long <- odes_long[odes_long$Time <= cutoff_date, ]
-    }
-    
-    # Dynamically generate the title based on delay and calendar_speedup
-    title_text <- paste("Weekly New Infections,",
-                        if(normalised) {"Normalised"} else {""}, "\n",
-                        if(!is.null(delay) && !is.null(calendar_speedup)) {
-                            paste("Delay:", delay, "days, Speedup:", calendar_speedup)
-                        } else {""})
-    
-    # Initialize ggplot object
-    p <- ggplot(odes_long, aes(x = Time, y = Cases, color = Group)) +
-        geom_line() +  # Draw lines connecting the points
-        geom_point() +  # Add points at each data point
-        labs(title = title_text, x = "Date", y = if(normalised) {"Newly Infected Fraction of Group"} else {"Number of Cases"}) +
-        theme_minimal() +
-        theme(plot.title = element_text(hjust = 0.5)) +  # Center-align the title
-        theme(legend.position = if(labs) "right" else "none") +  # Conditionally remove the legend if labs is FALSE
-        theme(plot.margin = unit(c(1,1,1,1), "lines")) +  # Adjust plot margins if legend is removed
-        scale_y_continuous(limits = c(NA, y_max)) +  # Conditionally set the y-axis limit if y_max is provided
-        scale_x_date(date_breaks = "1 month", date_labels = "%b") +  # Generate ticks for each month
-        theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 12))  # Apply 45-degree inclination to x-axis labels
-    
-    print(p)
-}
-
-
-
-
-
-
-
-
-
 
 
 
@@ -289,6 +287,7 @@ plot_odes <- function(odes, normalised=FALSE, delay=NULL,
 
 PLOT_CASE_SERIES <- TRUE
 
+SAVE_PLOT = FALSE
 
 
 # Define a range of vaccine calendar changes to iterate over
@@ -332,11 +331,12 @@ for(i in 1:length(vaccine_delays)) {
                                           speedup = calendar_speedup)
     print(cov_plot)
     
-    cov_filename <- paste("coverage-delay", delay,
-                          "-speedup", calendar_speedup, ".pdf", sep = "")
-    
-    
-    ggsave(cov_filename, plot = cov_plot, width = PLOT_WIDTH, height = PLOT_HEIGHT)
+    if (SAVE_PLOT) {
+        cov_filename <- paste("coverage-delay", delay,
+                              "-speedup", calendar_speedup, ".pdf", sep = "")
+        ggsave(cov_filename, plot = cov_plot, width = PLOT_WIDTH, height = PLOT_HEIGHT)
+    }
+
     
     
     # RUN MODEL
@@ -360,9 +360,12 @@ for(i in 1:length(vaccine_delays)) {
     
     print(cases_plot)
     
-    cases_filename <- paste("cases-delay", delay,
-                            "-speedup", calendar_speedup, ".pdf", sep = "")
-    ggsave(cases_filename, plot = cases_plot, width = PLOT_WIDTH, height = PLOT_HEIGHT)
+    if (SAVE_PLOT) {
+        cases_filename <- paste("cases-delay", delay,
+                                "-speedup", calendar_speedup, ".pdf", sep = "")
+        ggsave(cases_filename, plot = cases_plot, width = PLOT_WIDTH, height = PLOT_HEIGHT)
+    }
+
     
     # cases <- rowSums(vaccination_scenario(demography = demography,
     #                                       vaccine_calendar = new_calendar,
@@ -372,23 +375,6 @@ for(i in 1:length(vaccine_delays)) {
     #                                       verbose = F))
     # cases_df <- data.frame(value = cases, scenario = "Original")
     # ggplot(data = cases_df) + geom_histogram(aes(x = value), bins = 25)
-}
-
-
-
-
-
-
-
-
-####################################################################################
-# SAVE PLOT TO PDF
-####################################################################################
-
-SAVE_PLOT = FALSE
-
-if (SAVE_PLOT) {
-    ggsave("output.pdf", plot = plot_object, width = 7, height = 5)
 }
 
 
