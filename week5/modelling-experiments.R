@@ -119,14 +119,18 @@ plot_odes <- function(odes, normalised=FALSE, delay=NULL, calendar_speedup=NULL,
     odes_long <- melt(odes, id.vars = "Time", variable.name = "Group", value.name = "Cases")
     
     # Extract age group and risk group from the 'Group' column
-
-
     odes_long$AgeGroup <- sub(".*(\\[.*\\)).*", "\\1", odes_long$Group)
     odes_long$RiskGroup <- ifelse(grepl("LowRisk", odes_long$Group), "Low Risk", "High Risk")
     
+    # Ensure cutoff_date is a Date object and filter the data if provided
+    if (!is.null(cutoff_date)) {
+        cutoff_date <- as.Date(cutoff_date)
+        odes_long <- odes_long[odes_long$Time <= cutoff_date, ]
+    }
+    
     p <- ggplot(odes_long, aes(x = Time, y = Cases, color = AgeGroup, shape = RiskGroup)) +
         geom_line(aes(group = Group)) +
-        geom_point(size = marker_size) +
+        geom_point(size = 3) +  # Adjust size as needed
         scale_color_manual(values = age_group_colours) +
         scale_shape_manual(values = risk_group_shapes) +
         labs(title = paste("Weekly New Infections,", if(normalised) {"Normalised"} else {""}, "\n", 
@@ -139,13 +143,27 @@ plot_odes <- function(odes, normalised=FALSE, delay=NULL, calendar_speedup=NULL,
               legend.position = if(labs) "right" else "none",  # Conditionally remove the legend if labs is FALSE
               axis.text.x = element_text(angle = 45, hjust = 1)) +  # Apply 45-degree inclination to x-axis labels
         scale_y_continuous(limits = c(NA, y_max)) +
-        scale_x_date(date_breaks = "1 month", date_labels = "%b")  # Generate ticks for each month
+        scale_x_date(limits = c(min(odes_long$Time), cutoff_date), date_breaks = "1 month", date_labels = "%b")  # Adjusted for cutoff_date
     
     print(p)
 }
 
 
 
+total_cases <- function(odes) {
+    # Ensure 'odes' is a data frame and remove the 'Time' column
+    odes <- as.data.frame(odes)
+    odes$Time <- NULL
+    
+    # Sum all values for each group/column and round up to the nearest integer
+    total_cases_sum <- ceiling(colSums(odes, na.rm = TRUE))
+    
+    # Create a new data frame with the rounded summed values
+    total_cases_output <- as.data.frame(t(total_cases_sum))
+    colnames(total_cases_output) <- names(total_cases_sum)
+    
+    return(total_cases_output)
+}
 
 
 
@@ -312,92 +330,131 @@ PLOT_CASE_SERIES <- TRUE
 SAVE_PLOT = FALSE
 
 
-# Define a range of vaccine calendar changes to iterate over
+# THE BELOW ITERATES OVER A SELECTED RANGE OF VACCINATION SCENARIOS FOR PLOTTING
+# FOR AN EXTENSIVE RANGE OF DIFFERENT VACCINATION CALENDARS, SEE FURTHER BELOW (calendar_sensitivity)
 vaccine_scalings <- c(1, 1, 1, 1)
 
 vaccine_delays   <- c(0, 30, 0, 30)
 vaccine_speedups <- c(1, 1, 1.3, 1.3)
 
-# Iterate over the index range of vaccine_delays
-for(i in 1:length(vaccine_delays)) {
-    # Access each element by its index
-    
-    cov_scaling      <- vaccine_scalings[i]
-    delay            <- vaccine_delays[i]
-    calendar_speedup <- vaccine_speedups[i]
-    
-    temp <- modify_coverage_data(baseline_dates_vector,
-                                 baseline_coverage_matrix,
-                                 coverage_scaling = cov_scaling,
-                                 start_date_shift = delay,
-                                 uptake_speedup = calendar_speedup)
-    
-    new_dates_vector <- temp[[1]]
-    new_coverage_matrix <- temp[[2]]
-    
-    new_calendar <- as_vaccination_calendar(efficacy = baseline_vaccine_efficacy,
-                                            dates = new_dates_vector,
-                                            coverage = new_coverage_matrix,
-                                            no_risk_groups = 2,
-                                            no_age_groups = 3)
-    
-    
-    
-    truncation_date = "2023-04-01"
-    
-    
-    
-    cov_plot <- plot_coverage_time_series(new_dates_vector, new_coverage_matrix,
-                                          cutoff_date = truncation_date,
-                                          delay = delay,
-                                          speedup = calendar_speedup)
-    print(cov_plot)
-    
-    if (SAVE_PLOT) {
-        cov_filename <- paste("coverage-delay", delay,
-                              "-speedup", calendar_speedup, ".pdf", sep = "")
-        ggsave(cov_filename, plot = cov_plot, width = PLOT_WIDTH, height = PLOT_HEIGHT)
+run_calendar_scenarios <- function() {
+    for(i in 1:length(vaccine_delays)) {
+        # Access each element by its index
+        
+        cov_scaling      <- vaccine_scalings[i]
+        delay            <- vaccine_delays[i]
+        calendar_speedup <- vaccine_speedups[i]
+        
+        temp <- modify_coverage_data(baseline_dates_vector,
+                                     baseline_coverage_matrix,
+                                     coverage_scaling = cov_scaling,
+                                     start_date_shift = delay,
+                                     uptake_speedup = calendar_speedup)
+        
+        new_dates_vector <- temp[[1]]
+        new_coverage_matrix <- temp[[2]]
+        
+        new_calendar <- as_vaccination_calendar(efficacy = baseline_vaccine_efficacy,
+                                                dates = new_dates_vector,
+                                                coverage = new_coverage_matrix,
+                                                no_risk_groups = 2,
+                                                no_age_groups = 3)
+        
+        
+        
+        truncation_date = "2023-04-01"
+        
+        
+        
+        cov_plot <- plot_coverage_time_series(new_dates_vector, new_coverage_matrix,
+                                              cutoff_date = truncation_date,
+                                              delay = delay,
+                                              speedup = calendar_speedup)
+        print(cov_plot)
+        
+        if (SAVE_PLOT) {
+            cov_filename <- paste("coverage-delay", delay,
+                                  "-speedup", calendar_speedup, ".pdf", sep = "")
+            ggsave(cov_filename, plot = cov_plot, width = PLOT_WIDTH, height = PLOT_HEIGHT)
+        }
+        
+        
+        
+        # RUN MODEL
+        odes <- infectionODEs(population = population,
+                              initial_infected = initial_infected,
+                              vaccine_calendar = new_calendar,
+                              contact_matrix = contacts,
+                              susceptibility = c(mean_inferred_params['susceptibility_1'], mean_inferred_params['susceptibility_2'], mean_inferred_params['susceptibility_3']),
+                              transmissibility = mean_inferred_params['transmissibility'],
+                              infection_delays = c(T_latent, T_infectious),
+                              interval = 7)
+        
+        
+        normalised_odes <- normalise_odes(odes, population)
+        
+        
+        
+        cases_plot <- plot_odes(normalised_odes, normalised=TRUE, delay=delay,
+                                calendar_speedup=calendar_speedup, cutoff_date = truncation_date,
+                                y_max=0.009, labs = FALSE)
+        
+        print(cases_plot)
+        
+        if (SAVE_PLOT) {
+            cases_filename <- paste("cases-delay", delay,
+                                    "-speedup", calendar_speedup, ".pdf", sep = "")
+            ggsave(cases_filename, plot = cases_plot, width = PLOT_WIDTH, height = PLOT_HEIGHT)
+        }
+        
+        
+        # cases <- rowSums(vaccination_scenario(demography = demography,
+        #                                       vaccine_calendar = new_calendar,
+        #                                       polymod_data = polymod,
+        #                                       contact_ids = inference_results$contact.ids,
+        #                                       parameters = inference_results$batch,
+        #                                       verbose = F))
+        # cases_df <- data.frame(value = cases, scenario = "Original")
+        # ggplot(data = cases_df) + geom_histogram(aes(x = value), bins = 25)
     }
-
     
-    
-    # RUN MODEL
-    odes <- infectionODEs(population = population,
-                          initial_infected = initial_infected,
-                          vaccine_calendar = new_calendar,
-                          contact_matrix = contacts,
-                          susceptibility = c(mean_inferred_params['susceptibility_1'], mean_inferred_params['susceptibility_2'], mean_inferred_params['susceptibility_3']),
-                          transmissibility = mean_inferred_params['transmissibility'],
-                          infection_delays = c(T_latent, T_infectious),
-                          interval = 7)
-    
-    
-    normalised_odes <- normalise_odes(odes, population)
-    
-    
-    
-    cases_plot <- plot_odes(normalised_odes, normalised=TRUE, delay=delay,
-                            calendar_speedup=calendar_speedup, cutoff_date = truncation_date,
-                            y_max=0.009, labs = FALSE)
-    
-    print(cases_plot)
-    
-    if (SAVE_PLOT) {
-        cases_filename <- paste("cases-delay", delay,
-                                "-speedup", calendar_speedup, ".pdf", sep = "")
-        ggsave(cases_filename, plot = cases_plot, width = PLOT_WIDTH, height = PLOT_HEIGHT)
-    }
-
-    
-    # cases <- rowSums(vaccination_scenario(demography = demography,
-    #                                       vaccine_calendar = new_calendar,
-    #                                       polymod_data = polymod,
-    #                                       contact_ids = inference_results$contact.ids,
-    #                                       parameters = inference_results$batch,
-    #                                       verbose = F))
-    # cases_df <- data.frame(value = cases, scenario = "Original")
-    # ggplot(data = cases_df) + geom_histogram(aes(x = value), bins = 25)
 }
 
 
-
+calendar_sensitivity <- function(delay_vector, speedup_vector) {
+    if (length(delay_vector) != length(speedup_vector)) {
+        stop("Delay and speedups vectors must have the same length!")
+    }
+    
+    for(i in 1:length(delay_vector)) {
+        # Create this vaccination calendar
+        delay            <- vaccine_delays[i]
+        calendar_speedup <- vaccine_speedups[i]
+        temp <- modify_coverage_data(baseline_dates_vector,
+                                     baseline_coverage_matrix,
+                                     coverage_scaling = cov_scaling,
+                                     start_date_shift = delay,
+                                     uptake_speedup = calendar_speedup)
+        
+        new_dates_vector <- temp[[1]]
+        new_coverage_matrix <- temp[[2]]
+        
+        
+        new_calendar <- as_vaccination_calendar(efficacy = baseline_vaccine_efficacy,
+                                                dates = new_dates_vector,
+                                                coverage = new_coverage_matrix,
+                                                no_risk_groups = 2,
+                                                no_age_groups = 3)
+        
+        # RUN MODEL
+        odes <- infectionODEs(population = population,
+                              initial_infected = initial_infected,
+                              vaccine_calendar = new_calendar,
+                              contact_matrix = contacts,
+                              susceptibility = c(mean_inferred_params['susceptibility_1'], mean_inferred_params['susceptibility_2'], mean_inferred_params['susceptibility_3']),
+                              transmissibility = mean_inferred_params['transmissibility'],
+                              infection_delays = c(T_latent, T_infectious),
+                              interval = 7)
+        
+    }
+}
