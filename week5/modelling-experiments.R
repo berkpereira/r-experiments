@@ -12,6 +12,7 @@ library(qs)
 library(ggplot2)
 library(tidyverse)
 library(beepr)
+library(plotly)
 
 data(polymod_uk)
 data(demography)
@@ -62,7 +63,7 @@ T_infectious <- 2 / 1.1
 
 
 ####################################################################################
-# REDEFINE THIS TO HAVE PROPER SERIES LABELS
+# MISC FUNCTIONS DEFINITIONS
 ####################################################################################
 
 
@@ -148,8 +149,6 @@ plot_odes <- function(odes, normalised=FALSE, delay=NULL, calendar_speedup=NULL,
     print(p)
 }
 
-
-
 total_cases <- function(odes) {
     # Ensure 'odes' is a data frame and remove the 'Time' column
     odes <- as.data.frame(odes)
@@ -164,7 +163,6 @@ total_cases <- function(odes) {
     
     return(total_cases_output)
 }
-
 
 plot_param_hists <- function(inference_results, all_params = FALSE) {
     # Convert the batch results to a tibble for better handling with tidyverse functions
@@ -190,8 +188,6 @@ plot_param_hists <- function(inference_results, all_params = FALSE) {
         theme_minimal() +
         labs(x = "Parameter Value", y = "Frequency", title = "Histograms of Infererred Parameters")
 }
-
-
 
 peak_dates <- function(odes) {
     # Exclude the 'Time' column for calculation
@@ -220,6 +216,18 @@ peak_cases <- function(odes) {
     return(peak_cases_vec)
 }
 
+sensitivity_contours <- function(matrix, delay_vector, speedup_vector, title = "Contour Plot") {
+    # Convert the matrix to a data frame in long format
+    
+    # CAREFUL TO FLIP X Y RELATIVE TO ROW, COL IN THE DATA MATRIX INDICES!!! 
+    fig <- plot_ly(
+        y = delay_vector, 
+        x = speedup_vector, 
+        z = matrix, 
+        type = "contour"
+    )
+    fig
+}
 
 
 ####################################################################################
@@ -448,18 +456,26 @@ run_calendar_scenarios <- function() {
 
 calendar_sensitivity <- function(delay_vector, speedup_vector) {
     if (length(delay_vector) != length(speedup_vector)) {
-        stop("Delay and speedups vectors must have the same length!")
+        stop("Delay and speedup vectors must have the same length!")
     }
     
-    # Initialize an empty list to store results
-    results <- list()
+    # Initialize matrices and lists for storing the results
+    total_ili_numbers_list <- list()
+    peak_case_dates_list   <- list()
+    peak_case_numbers_list <- list()
     
-    for(i in 1:length(delay_vector)) {
-        # Initialize a list for this delay
-        results[[i]] <- list()
-        
-        for (j in 1:length(speedup_vector)) {
-            # Create this vaccination calendar
+    # Initialize lists for group names
+    group_names <- names(population)
+    
+    for (group in group_names) {
+        total_ili_numbers_list[[group]] <- matrix(nrow = length(delay_vector), ncol = length(speedup_vector))
+        peak_case_dates_list[[group]]   <- matrix(nrow = length(delay_vector), ncol = length(speedup_vector))
+        peak_case_numbers_list[[group]] <- matrix(nrow = length(delay_vector), ncol = length(speedup_vector))
+    }
+    
+    for(i in seq_along(delay_vector)) {
+        for (j in seq_along(speedup_vector)) {
+            # Create the vaccination calendar
             delay            <- delay_vector[i]
             calendar_speedup <- speedup_vector[j]
             
@@ -488,23 +504,35 @@ calendar_sensitivity <- function(delay_vector, speedup_vector) {
                                   infection_delays = c(T_latent, T_infectious),
                                   interval = 7)
             
-            # Get total number of cases over the season
-            total_ili_numbers <- total_cases(odes)
-            # Get dates of peak new weekly infections in each group
-            peak_case_dates   <- peak_dates(odes)
-            # Get corresponding peak values in each group
-            peak_case_numbers <- peak_cases(odes)
+            # Calculate the results for each combination of delay and speedup
+            # Placeholder for actual function calls
+            total_ili_numbers <- total_cases(odes)  # Placeholder
+            peak_case_dates   <- peak_dates(odes)  # Placeholder
+            peak_case_numbers <- peak_cases(odes)  # Placeholder
             
-            # Store in nested list
-            results[[i]][[j]] <- list(
-                total_ili_numbers = total_ili_numbers,
-                peak_case_dates = peak_case_dates,
-                peak_case_numbers = peak_case_numbers
-            )
+            # Store the results
+            for (k in 1:length(group_names)) {
+                group_name <- group_names[k]
+                
+                total_ili_numbers_list[[group_name]][i, j] <- total_ili_numbers[[group_name]]
+                peak_case_dates_list[[group_name]][i, j]   <- peak_case_dates[[group_name]]
+                peak_case_numbers_list[[group_name]][i, j] <- peak_case_numbers[[group_name]]
+            }
         }
     }
+    
+    # Consolidate results into a list
+    results <- list(
+        total_ili_numbers = total_ili_numbers_list,
+        peak_case_dates   = peak_case_dates_list,
+        peak_case_numbers = peak_case_numbers_list
+    )
+    
+    names(results) <- c("TotalIliNumbers", "PeakCaseDates", "PeakCaseNumbers")
+    
     return(results)
 }
+
 
 
 ####################################################################################
@@ -513,9 +541,17 @@ calendar_sensitivity <- function(delay_vector, speedup_vector) {
 
 SENSITIVITY_ANALYSIS <- TRUE
 
-delay_vector   <- seq(0, 60, length.out = 50)
-speedup_vector <- seq(0.8, 2, length.out = 50)
 
 if (SENSITIVITY_ANALYSIS) {
+    delay_vector   <- seq(0, 60, length.out = 50)
+    speedup_vector <- seq(0.8, 2, length.out = 50)
+    
     calendar_sensitivity_results <- calendar_sensitivity(delay_vector, speedup_vector)
+    
+    matrix_to_plot <- calendar_sensitivity_results$TotalIliNumbers[["LowRisk [0,15)"]]
+    
+    sensitivity_contours(matrix_to_plot, delay_vector, speedup_vector, title = "Total ILI Numbers Contour Plot")
 }
+
+
+
