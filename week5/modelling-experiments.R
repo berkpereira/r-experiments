@@ -460,12 +460,11 @@ calendar_sensitivity <- function(delay_vector, speedup_vector) {
         
         for (j in 1:length(speedup_vector)) {
             # Create this vaccination calendar
-            delay            <- vaccine_delays[i]
-            calendar_speedup <- vaccine_speedups[j]
+            delay            <- delay_vector[i]
+            calendar_speedup <- speedup_vector[j]
             
-            temp <- modify_coverage_data(baseline_dates_vector,
-                                         baseline_coverage_matrix,
-                                         coverage_scaling = cov_scaling,
+            temp <- modify_coverage_data(baseline_dates = baseline_dates_vector,
+                                         baseline_coverage = baseline_coverage_matrix,
                                          start_date_shift = delay,
                                          uptake_speedup = calendar_speedup)
             
@@ -512,11 +511,11 @@ calendar_sensitivity <- function(delay_vector, speedup_vector) {
 # CASE SUMMARY DATA SENSITIVITY TO VACCINATION CALENDAR DELAY AND SPEEDUP
 ####################################################################################
 
-SENSITIVITY_ANALYSIS <- FALSE
+SENSITIVITY_ANALYSIS <- TRUE
 
 delay_vector   <- seq(0, 60, length.out = 50)
 speedup_vector <- seq(0.8, 2, length.out = 50)
 
 if (SENSITIVITY_ANALYSIS) {
-    calendar_sensitivity()
+    calendar_sensitivity_results <- calendar_sensitivity(delay_vector, speedup_vector)
 }
