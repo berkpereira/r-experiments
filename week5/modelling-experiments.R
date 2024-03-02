@@ -451,38 +451,72 @@ calendar_sensitivity <- function(delay_vector, speedup_vector) {
         stop("Delay and speedups vectors must have the same length!")
     }
     
+    # Initialize an empty list to store results
+    results <- list()
+    
     for(i in 1:length(delay_vector)) {
-        # Create this vaccination calendar
-        delay            <- vaccine_delays[i]
-        calendar_speedup <- vaccine_speedups[i]
-        temp <- modify_coverage_data(baseline_dates_vector,
-                                     baseline_coverage_matrix,
-                                     coverage_scaling = cov_scaling,
-                                     start_date_shift = delay,
-                                     uptake_speedup = calendar_speedup)
+        # Initialize a list for this delay
+        results[[i]] <- list()
         
-        new_dates_vector <- temp[[1]]
-        new_coverage_matrix <- temp[[2]]
-        
-        
-        new_calendar <- as_vaccination_calendar(efficacy = baseline_vaccine_efficacy,
-                                                dates = new_dates_vector,
-                                                coverage = new_coverage_matrix,
-                                                no_risk_groups = 2,
-                                                no_age_groups = 3)
-        
-        # RUN MODEL
-        odes <- infectionODEs(population = population,
-                              initial_infected = initial_infected,
-                              vaccine_calendar = new_calendar,
-                              contact_matrix = contacts,
-                              susceptibility = c(mean_inferred_params['susceptibility_1'], mean_inferred_params['susceptibility_2'], mean_inferred_params['susceptibility_3']),
-                              transmissibility = mean_inferred_params['transmissibility'],
-                              infection_delays = c(T_latent, T_infectious),
-                              interval = 7)
-        
-        # Sum over odes object to get total number of cases over the season
-        total_ili_numbers <- total_cases(odes)
-        
+        for (j in 1:length(speedup_vector)) {
+            # Create this vaccination calendar
+            delay            <- vaccine_delays[i]
+            calendar_speedup <- vaccine_speedups[j]
+            
+            temp <- modify_coverage_data(baseline_dates_vector,
+                                         baseline_coverage_matrix,
+                                         coverage_scaling = cov_scaling,
+                                         start_date_shift = delay,
+                                         uptake_speedup = calendar_speedup)
+            
+            new_dates_vector <- temp[[1]]
+            new_coverage_matrix <- temp[[2]]
+            
+            
+            new_calendar <- as_vaccination_calendar(efficacy = baseline_vaccine_efficacy,
+                                                    dates = new_dates_vector,
+                                                    coverage = new_coverage_matrix,
+                                                    no_risk_groups = 2,
+                                                    no_age_groups = 3)
+            
+            # RUN MODEL
+            odes <- infectionODEs(population = population,
+                                  initial_infected = initial_infected,
+                                  vaccine_calendar = new_calendar,
+                                  contact_matrix = contacts,
+                                  susceptibility = c(mean_inferred_params['susceptibility_1'], mean_inferred_params['susceptibility_2'], mean_inferred_params['susceptibility_3']),
+                                  transmissibility = mean_inferred_params['transmissibility'],
+                                  infection_delays = c(T_latent, T_infectious),
+                                  interval = 7)
+            
+            # Get total number of cases over the season
+            total_ili_numbers <- total_cases(odes)
+            # Get dates of peak new weekly infections in each group
+            peak_case_dates   <- peak_dates(odes)
+            # Get corresponding peak values in each group
+            peak_case_numbers <- peak_cases(odes)
+            
+            # Store in nested list
+            results[[i]][[j]] <- list(
+                total_ili_numbers = total_ili_numbers,
+                peak_case_dates = peak_case_dates,
+                peak_case_numbers = peak_case_numbers
+            )
+        }
     }
+    return(results)
+}
+
+
+####################################################################################
+# CASE SUMMARY DATA SENSITIVITY TO VACCINATION CALENDAR DELAY AND SPEEDUP
+####################################################################################
+
+SENSITIVITY_ANALYSIS <- FALSE
+
+delay_vector   <- seq(0, 60, length.out = 50)
+speedup_vector <- seq(0.8, 2, length.out = 50)
+
+if (SENSITIVITY_ANALYSIS) {
+    calendar_sensitivity()
 }
