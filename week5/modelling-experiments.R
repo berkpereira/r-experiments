@@ -166,11 +166,6 @@ total_cases <- function(odes) {
 }
 
 
-
-
-
-
-
 plot_param_hists <- function(inference_results, all_params = FALSE) {
     # Convert the batch results to a tibble for better handling with tidyverse functions
     batch_tibble <- as_tibble(inference_results$batch)
@@ -195,6 +190,36 @@ plot_param_hists <- function(inference_results, all_params = FALSE) {
         theme_minimal() +
         labs(x = "Parameter Value", y = "Frequency", title = "Histograms of Infererred Parameters")
 }
+
+
+
+peak_dates <- function(odes) {
+    # Exclude the 'Time' column for calculation
+    data_without_time <- odes[, -1]
+    
+    # Initialize an empty vector to store peak dates
+    peak_dates_vec <- vector("list", length = ncol(data_without_time))
+    
+    # Iterate over each column to find the index of the max value and map it to its date
+    for (i in seq_along(data_without_time)) {
+        max_index <- which.max(data_without_time[[i]])
+        peak_dates_vec[[i]] <- odes$Time[max_index]
+    }
+    
+    # Return the list of peak dates
+    names(peak_dates_vec) <- colnames(data_without_time)
+    return(peak_dates_vec)
+}
+
+peak_cases <- function(odes) {
+    # Exclude the 'Time' column for calculation
+    data_without_time <- odes[, -1]
+    
+    # Apply max function column-wise and return the result
+    peak_cases_vec <- apply(data_without_time, 2, max, na.rm = TRUE)
+    return(peak_cases_vec)
+}
+
 
 
 ####################################################################################
@@ -455,6 +480,9 @@ calendar_sensitivity <- function(delay_vector, speedup_vector) {
                               transmissibility = mean_inferred_params['transmissibility'],
                               infection_delays = c(T_latent, T_infectious),
                               interval = 7)
+        
+        # Sum over odes object to get total number of cases over the season
+        total_ili_numbers <- total_cases(odes)
         
     }
 }
