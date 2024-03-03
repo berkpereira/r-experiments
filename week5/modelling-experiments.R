@@ -217,17 +217,43 @@ peak_cases <- function(odes) {
 }
 
 sensitivity_contours <- function(matrix, delay_vector, speedup_vector, title = "Contour Plot") {
-    # Convert the matrix to a data frame in long format
     
     # CAREFUL TO FLIP X Y RELATIVE TO ROW, COL IN THE DATA MATRIX INDICES!!! 
     fig <- plot_ly(
         y = delay_vector, 
         x = speedup_vector, 
         z = matrix, 
-        type = "contour"
-    )
-    fig
+        type = "contour",
+        colorscale = 'Hot',
+        contours = list(showlabels = TRUE)
+    ) %>% layout(title = title,
+                 xaxis = list(title = "Vaccination Calendar Speedup"),
+                 yaxis = list(title = "Vaccination Calendar Delay (days)"))
+    
+    return(fig)
 }
+
+# Function to generate contour plots with ggplot2 and aesthetic adjustments
+# Function to generate contour plots with ggplot2
+sensitivity_contours_ggplot <- function(matrix, delay_vector, speedup_vector, title = "Contour Plot") {
+    data_melted <- melt(matrix)
+    
+    names(data_melted) <- c("X1", "Y1", "value")
+    
+    data_melted$X <- delay_vector[data_melted$X1]
+    data_melted$Y <- speedup_vector[data_melted$Y1]
+    
+    # Generate the plot using the corrected data frame
+    p <- ggplot(data_melted, aes(x = Y, y = X, z = value)) +
+        + stat_contour(aes(fill=..level..))
+    
+    print(p)
+}
+
+# Example usage
+# Assuming matrix, delay_vector, and speedup_vector are defined
+# sensitivity_contours_ggplot(matrix, delay_vector, speedup_vector, "Custom Contour Plot")
+
 
 
 ####################################################################################
@@ -541,6 +567,10 @@ calendar_sensitivity <- function(delay_vector, speedup_vector) {
 
 SENSITIVITY_ANALYSIS <- TRUE
 
+SAVE_CONTOUR <- FALSE
+
+SAVE_FOR_MATLAB <- TRUE
+
 
 if (SENSITIVITY_ANALYSIS) {
     delay_vector   <- seq(0, 60, length.out = 50)
@@ -548,10 +578,42 @@ if (SENSITIVITY_ANALYSIS) {
     
     calendar_sensitivity_results <- calendar_sensitivity(delay_vector, speedup_vector)
     
-    matrix_to_plot <- calendar_sensitivity_results$TotalIliNumbers[["LowRisk [0,15)"]]
+    # Plot for elderly or the high risk
+    contour_group <- "High Risk"
+    quantity <- "TotalIliNumbers"
     
-    sensitivity_contours(matrix_to_plot, delay_vector, speedup_vector, title = "Total ILI Numbers Contour Plot")
+    if (contour_group == 'Elderly') {
+        if (quantity == 'TotalIliNumbers') {
+            matrix_to_plot <- calendar_sensitivity_results$TotalIliNumbers[["LowRisk [65,+)"]] +
+                calendar_sensitivity_results$TotalIliNumbers[["HighRisk [65,+)"]]
+        }
+    } else if (contour_group == 'High Risk') {
+        if (quantity == 'TotalIliNumbers') {
+            matrix_to_plot <- calendar_sensitivity_results$TotalIliNumbers[["HighRisk [0,15)"]] +
+                calendar_sensitivity_results$TotalIliNumbers[["HighRisk [15,65)"]] +
+                calendar_sensitivity_results$TotalIliNumbers[["HighRisk [65,+)"]]
+        }
+    }
+    
+    if (SAVE_FOR_MATLAB) {
+        # Save the matrix
+        write.csv(matrix_to_plot, file = "~/Documents/MATLAB/oxford/case-study-modelling/data_matrix.csv", sep = ",", col.names = FALSE, row.names = FALSE, quote = FALSE)
+        
+        # Save the delay vector
+        write.csv(delay_vector, file = "~/Documents/MATLAB/oxford/case-study-modelling/delay_vector.csv", row.names = FALSE, col.names = FALSE)
+        
+        # Save the speedup vector
+        write.csv(speedup_vector, file = "~/Documents/MATLAB/oxford/case-study-modelling/speedup_vector.csv", row.names = FALSE, col.names = FALSE)
+    }
+    
+    #contour_fig <- sensitivity_contours_ggplot(matrix_to_plot, delay_vector, speedup_vector,
+    #                     title = paste("Total Season Cases in ", contour_group, " Population", sep = ""))
+    
+    # print(contour_fig)
+    
+    if (SAVE_CONTOUR) {
+        contour_filename <- paste("contour-group", contour_group,
+                                  "-quantity-", quantity, ".pdf", sep = "")
+        save_image(contour_fig, file=contour_filename, width = PLOT_WIDTH, height = PLOT_HEIGHT)
+    }
 }
-
-
-
