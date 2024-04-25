@@ -1,6 +1,3 @@
-# setwd("repos/r-experiments/week5")
-
-
 library(fluEvidenceSynthesis)
 library(pander)
 library(ggplot2)
@@ -13,12 +10,10 @@ library(ggplot2)
 library(tidyverse)
 library(beepr)
 library(plotly)
+library(latex2exp)
 
 data(polymod_uk)
 data(demography)
-
-
-
 
 PLOT_WIDTH <- 4
 PLOT_HEIGHT <- 4.5
@@ -50,16 +45,6 @@ if (strain == "H3N2") {
 
 ili <- infer_data$ili
 viro <- infer_data$viro
-
-
-
-
-# Values below taken from Baguelin 2013, page 6
-# In DAYS
-T_latent <- 2 / 2.5
-T_infectious <- 2 / 1.1
-
-
 
 
 ####################################################################################
@@ -250,10 +235,6 @@ sensitivity_contours_ggplot <- function(matrix, delay_vector, speedup_vector, ti
     print(p)
 }
 
-# Example usage
-# Assuming matrix, delay_vector, and speedup_vector are defined
-# sensitivity_contours_ggplot(matrix, delay_vector, speedup_vector, "Custom Contour Plot")
-
 
 
 ####################################################################################
@@ -284,13 +265,13 @@ initial_infected <- stratify_by_risk(ag, matrix(risk_ratios,nrow=1))
 # VACCINE CALENDAR
 ####################################################################################
 
-PLOT_COVERAGE <- FALSE
+PLOT_BASELINE_COVERAGE <- TRUE
 
-if (PLOT_COVERAGE) {
+if (PLOT_BASELINE_COVERAGE) {
     plot_coverage_time_series(baseline_dates_vector, baseline_coverage_matrix)
 }
 
-
+# FUNCTION TO GENERATE MODIFIED VACCINATION CALENDARS
 modify_coverage_data <- function(baseline_dates, baseline_coverage,
                                  start_date_shift = 0, coverage_scaling = 1,
                                  uptake_speedup = 1) {
@@ -342,24 +323,19 @@ modify_coverage_data <- function(baseline_dates, baseline_coverage,
 }
 
 
-if (PLOT_COVERAGE) {
-    plot_coverage_time_series(new_dates_vector, new_coverage_matrix)
-}
-
-
-
 ####################################################################################
 # EPIDEMIOLOGICAL PARAMETERS
 ####################################################################################
 
-susceptibility <- c(0.7, 0.3) # Different for different ages
-transmissibility <- 0.14 # Same for all ages
+# susceptibility <- c(0.7, 0.3) # (0.7, 0.3) from MODELLING VIGNETTE 
+susceptibility <- c(0.57, 0.72, 0.56) # Different for different ages
+transmissibility <- 0.14 # 0.14 taken from leeuwen2023 supplementary material
 
 
 # LOOK INTO EPIPARAMETER OR OTHER LITERATURE TO OBTAIN THESE VALUES HERE
 # values from paper: https://doi.org/10.1038/nature04017, as also used in
 # baguelin2013.pdf (see page 6)
-infection_delays <- c( 0.8, 1.8 ) 
+infection_delays <- c( 2/2.5, 2/1.1 ) 
 
 
 
@@ -379,24 +355,16 @@ normalise_odes <- function(odes, population_vector) {
 
 
 
+
 ####################################################################################
-# ITERATE OVER PARAMETER VALUES
+# CASE SUMMARY DATA SENSITIVITY TO VACCINATION CALENDAR DELAY AND SPEEDUP
 ####################################################################################
 
-
-PLOT_CASE_SERIES <- TRUE
-
-SAVE_PLOT = FALSE
-
-
-# THE BELOW ITERATES OVER A SELECTED RANGE OF VACCINATION SCENARIOS FOR PLOTTING
-# FOR AN EXTENSIVE RANGE OF DIFFERENT VACCINATION CALENDARS, SEE FURTHER BELOW (calendar_sensitivity)
-vaccine_scalings <- c(1, 1, 1, 1)
-
-vaccine_delays   <- c(0, 30, 0, 30)
-vaccine_speedups <- c(1, 1, 1.3, 1.3)
-
-run_calendar_scenarios <- function() {
+# THIS FUNCTION runs a few vaccination scenarios for exlpicit plotting of each calendar
+# and resulting epidemic wave
+# NOTE: vaccine_delays in days; speedups in factor stretching (applied before the delay, of course);
+# vaccine_scalings is the vertical scaling factor (vertical when looking at a coverage time series plot)
+run_calendar_scenarios <- function(vaccine_delays, vaccine_speedups, vaccine_scalings, infection_delays) {
     for(i in 1:length(vaccine_delays)) {
         # Access each element by its index
         
@@ -446,7 +414,7 @@ run_calendar_scenarios <- function() {
                               contact_matrix = contacts,
                               susceptibility = c(mean_inferred_params['susceptibility_1'], mean_inferred_params['susceptibility_2'], mean_inferred_params['susceptibility_3']),
                               transmissibility = mean_inferred_params['transmissibility'],
-                              infection_delays = c(T_latent, T_infectious),
+                              infection_delays = infection_delays,
                               interval = 7)
         
         
@@ -458,7 +426,7 @@ run_calendar_scenarios <- function() {
                                 calendar_speedup=calendar_speedup, cutoff_date = truncation_date,
                                 y_max=0.009, labs = FALSE)
         
-        print(cases_plot)
+        # print(cases_plot) # does NOT seem necessary
         
         if (SAVE_PLOT) {
             cases_filename <- paste("cases-delay", delay,
@@ -480,6 +448,8 @@ run_calendar_scenarios <- function() {
 }
 
 
+# THIS FUNCTION is used in the big sensitivity analysis which we then
+# went on to plot in MATLAB
 calendar_sensitivity <- function(delay_vector, speedup_vector) {
     if (length(delay_vector) != length(speedup_vector)) {
         stop("Delay and speedup vectors must have the same length!")
@@ -561,17 +531,37 @@ calendar_sensitivity <- function(delay_vector, speedup_vector) {
 
 
 
-####################################################################################
-# CASE SUMMARY DATA SENSITIVITY TO VACCINATION CALENDAR DELAY AND SPEEDUP
-####################################################################################
 
-SENSITIVITY_ANALYSIS <- TRUE
+######################## RUN STUFF PROPER
 
+
+vaccine_delays   <- c(0, 30, 0, 30)
+vaccine_speedups <- c(1, 1, 1.3, 1.3)
+vaccine_scalings <- c(1, 1, 1, 1) # keep it to ones, not very realistic to upscale as per Jasmina
+
+SAVE_PLOT <- FALSE
+
+SENSITIVITY_ANALYSIS <- FALSE
+
+RUN_CALENDAR_SCENARIOS <- TRUE
+
+# CONTOURS REALLY NOT WORKING IN R
 SAVE_CONTOUR <- FALSE
 
-SAVE_FOR_MATLAB <- TRUE
+# SHOULD IMPROVE FILE NAMING FOR MATLAB BEFORE SAVING ANY FURTHER STUFF!
+SAVE_FOR_MATLAB <- FALSE
 
+# THIS RUN runs through the few select cases for explicit plotting of vaccination
+# calendars and consequent epidemic curves.
+if (RUN_CALENDAR_SCENARIOS) {
+    run_calendar_scenarios(vaccine_delays=vaccine_delays,
+                           vaccine_speedups=vaccine_speedups,
+                           vaccine_scalings=vaccine_scalings,
+                           infection_delays=infection_delays)
+}
 
+# THIS RUN makes a large run of many scenarios and stores only summary data
+# e.g., peak cases or total cases in a group.
 if (SENSITIVITY_ANALYSIS) {
     delay_vector   <- seq(0, 60, length.out = 50)
     speedup_vector <- seq(0.8, 2, length.out = 50)
@@ -579,13 +569,16 @@ if (SENSITIVITY_ANALYSIS) {
     calendar_sensitivity_results <- calendar_sensitivity(delay_vector, speedup_vector)
     
     # Plot for elderly or the high risk
-    contour_group <- "High Risk"
-    quantity <- "TotalIliNumbers"
+    contour_group <- "Elderly"
+    quantity <- "PeakCaseNumbers"
     
     if (contour_group == 'Elderly') {
         if (quantity == 'TotalIliNumbers') {
             matrix_to_plot <- calendar_sensitivity_results$TotalIliNumbers[["LowRisk [65,+)"]] +
                 calendar_sensitivity_results$TotalIliNumbers[["HighRisk [65,+)"]]
+        } else if (quantity == 'PeakCaseNumbers') {
+            matrix_to_plot <- calendar_sensitivity_results$PeakCaseNumbers[["LowRisk [65,+)"]] +
+                calendar_sensitivity_results$PeakCaseNumbers[["HighRisk [65,+)"]]
         }
     } else if (contour_group == 'High Risk') {
         if (quantity == 'TotalIliNumbers') {
@@ -595,6 +588,7 @@ if (SENSITIVITY_ANALYSIS) {
         }
     }
     
+    # THE BELOW SHOULD REALLY BE MADE BETTER BY INCLUDING INFORMATIVE FILE NAMES!
     if (SAVE_FOR_MATLAB) {
         # Save the matrix
         write.csv(matrix_to_plot, file = "~/Documents/MATLAB/oxford/case-study-modelling/data_matrix.csv", sep = ",", col.names = FALSE, row.names = FALSE, quote = FALSE)
@@ -606,7 +600,8 @@ if (SENSITIVITY_ANALYSIS) {
         write.csv(speedup_vector, file = "~/Documents/MATLAB/oxford/case-study-modelling/speedup_vector.csv", row.names = FALSE, col.names = FALSE)
     }
     
-    #contour_fig <- sensitivity_contours_ggplot(matrix_to_plot, delay_vector, speedup_vector,
+    # CONTOUR STUFF BELOW IS FAIRLY BROKEN, SO I DID IT IN MATLAB INSTEAD
+    # contour_fig <- sensitivity_contours_ggplot(matrix_to_plot, delay_vector, speedup_vector,
     #                     title = paste("Total Season Cases in ", contour_group, " Population", sep = ""))
     
     # print(contour_fig)
