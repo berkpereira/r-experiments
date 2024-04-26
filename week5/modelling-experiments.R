@@ -11,12 +11,22 @@ library(tidyverse)
 library(beepr)
 library(plotly)
 library(latex2exp)
+library(extrafont)
 
 data(polymod_uk)
 data(demography)
 
-PLOT_WIDTH <- 4
-PLOT_HEIGHT <- 4.5
+PLOT_WIDTH <- 5.5 # inches
+PLOT_HEIGHT <- 3 # inches
+FONT_SIZE <- 12 # points
+
+# Set a global theme for all ggplot2 plots
+theme_set(theme_minimal(base_size = 12) + 
+              theme(
+                  plot.title = element_text(size = rel(1.2)),  # 120% of the base size
+                  axis.text = element_text(size = rel(0.8)),   # 80% of the base size
+                  axis.title = element_text(size = rel(1))     # 100% of the base size
+              ))
 
 
 ####################################################################################
@@ -351,11 +361,6 @@ normalise_odes <- function(odes, population_vector) {
 }
 
 
-
-
-
-
-
 ####################################################################################
 # CASE SUMMARY DATA SENSITIVITY TO VACCINATION CALENDAR DELAY AND SPEEDUP
 ####################################################################################
@@ -364,7 +369,8 @@ normalise_odes <- function(odes, population_vector) {
 # and resulting epidemic wave
 # NOTE: vaccine_delays in days; speedups in factor stretching (applied before the delay, of course);
 # vaccine_scalings is the vertical scaling factor (vertical when looking at a coverage time series plot)
-run_calendar_scenarios <- function(vaccine_delays, vaccine_speedups, vaccine_scalings, infection_delays) {
+run_calendar_scenarios <- function(vaccine_delays, vaccine_speedups, vaccine_scalings, infection_delays,
+                                   susceptibility, transmissibility, initial_infected, savefig) {
     for(i in 1:length(vaccine_delays)) {
         # Access each element by its index
         
@@ -428,7 +434,7 @@ run_calendar_scenarios <- function(vaccine_delays, vaccine_speedups, vaccine_sca
         
         # print(cases_plot) # does NOT seem necessary
         
-        if (SAVE_PLOT) {
+        if (savefig) {
             cases_filename <- paste("cases-delay", delay,
                                     "-speedup", calendar_speedup, ".pdf", sep = "")
             ggsave(cases_filename, plot = cases_plot, width = PLOT_WIDTH, height = PLOT_HEIGHT)
@@ -539,14 +545,11 @@ vaccine_delays   <- c(0, 30, 0, 30)
 vaccine_speedups <- c(1, 1, 1.3, 1.3)
 vaccine_scalings <- c(1, 1, 1, 1) # keep it to ones, not very realistic to upscale as per Jasmina
 
-SAVE_PLOT <- FALSE
+SAVE_PLOT <- TRUE
 
 SENSITIVITY_ANALYSIS <- FALSE
 
 RUN_CALENDAR_SCENARIOS <- TRUE
-
-# CONTOURS REALLY NOT WORKING IN R
-SAVE_CONTOUR <- FALSE
 
 # SHOULD IMPROVE FILE NAMING FOR MATLAB BEFORE SAVING ANY FURTHER STUFF!
 SAVE_FOR_MATLAB <- FALSE
@@ -557,7 +560,11 @@ if (RUN_CALENDAR_SCENARIOS) {
     run_calendar_scenarios(vaccine_delays=vaccine_delays,
                            vaccine_speedups=vaccine_speedups,
                            vaccine_scalings=vaccine_scalings,
-                           infection_delays=infection_delays)
+                           infection_delays=infection_delays,
+                           susceptibility=susceptibility,
+                           transmissibility=transmissibility,
+                           initial_infected=initial_infected,
+                           savefig=SAVE_PLOT)
 }
 
 # THIS RUN makes a large run of many scenarios and stores only summary data
