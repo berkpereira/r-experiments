@@ -68,7 +68,8 @@ marker_size <- 2
 
 
 
-plot_coverage_time_series <- function(dates, coverage, delay=NULL, speedup=NULL, cutoff_date=NULL) {
+plot_coverage_time_series <- function(dates, coverage, delay=NULL, speedup=NULL,
+                                      cutoff_date=NULL, title=FALSE) {
     coverage_df <- as.data.frame(coverage)
     colnames(coverage_df) <- c("Low Risk [0,15)", "Low Risk [15,65)", "Low Risk [65,+)",
                                "High Risk [0,15)", "High Risk [15,65)", "High Risk [65,+)")
@@ -101,9 +102,9 @@ plot_coverage_time_series <- function(dates, coverage, delay=NULL, speedup=NULL,
         scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
         scale_x_date(limits = c(min(dates), ifelse(is.null(cutoff_date), max(dates), cutoff_date)), 
                      date_breaks = "1 month", date_labels = "%b") +
-        labs(title = paste("Vaccine Coverage Over Time", ifelse(!is.null(delay) && !is.null(speedup), 
+        labs(title = if (title) {paste("Vaccine Coverage Over Time", ifelse(!is.null(delay) && !is.null(speedup), 
                                                                 paste("\nDelay:", delay, "days, Speedup:", speedup), 
-                                                                "")), 
+                                                                "")) } else NULL, 
              x = "Date", y = "Coverage (%)") +
         theme_minimal() +
         theme(plot.title = element_text(hjust = 0.5),  
@@ -111,7 +112,8 @@ plot_coverage_time_series <- function(dates, coverage, delay=NULL, speedup=NULL,
 }
 
 # Adjust plot_odes function
-plot_odes <- function(odes, normalised=FALSE, delay=NULL, calendar_speedup=NULL, cutoff_date=NULL, y_max=NULL, labs=TRUE) {
+plot_odes <- function(odes, normalised=FALSE, delay=NULL, calendar_speedup=NULL,
+                      cutoff_date=NULL, y_max=NULL, labs=TRUE, title=FALSE) {
     odes_long <- melt(odes, id.vars = "Time", variable.name = "Group", value.name = "Cases")
     
     # Extract age group and risk group from the 'Group' column
@@ -129,10 +131,10 @@ plot_odes <- function(odes, normalised=FALSE, delay=NULL, calendar_speedup=NULL,
         geom_point(size = 3) +  # Adjust size as needed
         scale_color_manual(values = age_group_colours) +
         scale_shape_manual(values = risk_group_shapes) +
-        labs(title = paste("Weekly New Infections,", if(normalised) {"Normalised"} else {""}, "\n", 
+        labs(title = if (title) {paste("Weekly New Infections,", if(normalised) {"Normalised"} else {""}, "\n", 
                            if(!is.null(delay) && !is.null(calendar_speedup)) {
                                paste("Delay:", delay, "days, Speedup:", calendar_speedup)
-                           } else {""}),
+                           } else {""})} else NULL,
              x = "Date", y = if(normalised) {"Newly Infected Fraction of Group"} else {"Number of Cases"}) +
         theme_minimal() +
         theme(plot.title = element_text(hjust = 0.5),  # Center-align the title
@@ -275,12 +277,6 @@ initial_infected <- stratify_by_risk(ag, matrix(risk_ratios,nrow=1))
 # VACCINE CALENDAR
 ####################################################################################
 
-PLOT_BASELINE_COVERAGE <- TRUE
-
-if (PLOT_BASELINE_COVERAGE) {
-    plot_coverage_time_series(baseline_dates_vector, baseline_coverage_matrix)
-}
-
 # FUNCTION TO GENERATE MODIFIED VACCINATION CALENDARS
 modify_coverage_data <- function(baseline_dates, baseline_coverage,
                                  start_date_shift = 0, coverage_scaling = 1,
@@ -397,23 +393,29 @@ run_calendar_scenarios <- function(vaccine_delays, vaccine_speedups, vaccine_sca
         
         truncation_date = "2023-04-01"
         
-        
-        
-        cov_plot <- plot_coverage_time_series(new_dates_vector, new_coverage_matrix,
-                                              cutoff_date = truncation_date,
-                                              delay = delay,
-                                              speedup = calendar_speedup)
-        print(cov_plot)
-        
-        if (SAVE_PLOT) {
+        # Show coverage plot for all groups and save plot if requested
+        if (savefig) {
+            cov_plot <- plot_coverage_time_series(new_dates_vector, new_coverage_matrix,
+                                                  cutoff_date = truncation_date,
+                                                  delay = delay,
+                                                  speedup = calendar_speedup,
+                                                  title=FALSE)
             cov_filename <- paste("coverage-delay", delay,
                                   "-speedup", calendar_speedup, ".pdf", sep = "")
             ggsave(cov_filename, plot = cov_plot, width = PLOT_WIDTH, height = PLOT_HEIGHT)
+        } 
+        else {
+            cov_plot <- plot_coverage_time_series(new_dates_vector, new_coverage_matrix,
+                                                  cutoff_date = truncation_date,
+                                                  delay = delay,
+                                                  speedup = calendar_speedup,
+                                                  title=TRUE)
         }
         
+        print(cov_plot)
         
         
-        # RUN MODEL
+        # Run model and normalise results
         odes <- infectionODEs(population = population,
                               initial_infected = initial_infected,
                               vaccine_calendar = new_calendar,
@@ -423,21 +425,20 @@ run_calendar_scenarios <- function(vaccine_delays, vaccine_speedups, vaccine_sca
                               infection_delays = infection_delays,
                               interval = 7)
         
-        
         normalised_odes <- normalise_odes(odes, population)
         
-        
-        
-        cases_plot <- plot_odes(normalised_odes, normalised=TRUE, delay=delay,
-                                calendar_speedup=calendar_speedup, cutoff_date = truncation_date,
-                                y_max=0.009, labs = FALSE)
-        
-        # print(cases_plot) # does NOT seem necessary
-        
         if (savefig) {
+            cases_plot <- plot_odes(normalised_odes, normalised=TRUE, delay=delay,
+                                    calendar_speedup=calendar_speedup, cutoff_date = truncation_date,
+                                    y_max=0.009, labs = TRUE, title=FALSE)
             cases_filename <- paste("cases-delay", delay,
                                     "-speedup", calendar_speedup, ".pdf", sep = "")
             ggsave(cases_filename, plot = cases_plot, width = PLOT_WIDTH, height = PLOT_HEIGHT)
+        }
+        else {
+            cases_plot <- plot_odes(normalised_odes, normalised=TRUE, delay=delay,
+                                    calendar_speedup=calendar_speedup, cutoff_date = truncation_date,
+                                    y_max=0.009, labs = TRUE, title=TRUE)
         }
         
         
@@ -456,7 +457,7 @@ run_calendar_scenarios <- function(vaccine_delays, vaccine_speedups, vaccine_sca
 
 # THIS FUNCTION is used in the big sensitivity analysis which we then
 # went on to plot in MATLAB
-calendar_sensitivity <- function(delay_vector, speedup_vector) {
+calendar_sensitivity <- function(delay_vector, speedup_vector, infection_delays) {
     if (length(delay_vector) != length(speedup_vector)) {
         stop("Delay and speedup vectors must have the same length!")
     }
@@ -503,14 +504,14 @@ calendar_sensitivity <- function(delay_vector, speedup_vector) {
                                   contact_matrix = contacts,
                                   susceptibility = c(mean_inferred_params['susceptibility_1'], mean_inferred_params['susceptibility_2'], mean_inferred_params['susceptibility_3']),
                                   transmissibility = mean_inferred_params['transmissibility'],
-                                  infection_delays = c(T_latent, T_infectious),
+                                  infection_delays = infection_delays,
                                   interval = 7)
             
             # Calculate the results for each combination of delay and speedup
             # Placeholder for actual function calls
             total_ili_numbers <- total_cases(odes)  # Placeholder
-            peak_case_dates   <- peak_dates(odes)  # Placeholder
-            peak_case_numbers <- peak_cases(odes)  # Placeholder
+            peak_case_dates   <- peak_dates(odes)   # Placeholder
+            peak_case_numbers <- peak_cases(odes)   # Placeholder
             
             # Store the results
             for (k in 1:length(group_names)) {
@@ -545,6 +546,8 @@ vaccine_delays   <- c(0, 30, 0, 30)
 vaccine_speedups <- c(1, 1, 1.3, 1.3)
 vaccine_scalings <- c(1, 1, 1, 1) # keep it to ones, not very realistic to upscale as per Jasmina
 
+PLOT_BASELINE_COVERAGE <- TRUE
+
 SAVE_PLOT <- TRUE
 
 SENSITIVITY_ANALYSIS <- FALSE
@@ -553,6 +556,12 @@ RUN_CALENDAR_SCENARIOS <- TRUE
 
 # SHOULD IMPROVE FILE NAMING FOR MATLAB BEFORE SAVING ANY FURTHER STUFF!
 SAVE_FOR_MATLAB <- FALSE
+
+# Plots baseline vaccine calendar coverage
+if (PLOT_BASELINE_COVERAGE) {
+    plot_coverage_time_series(baseline_dates_vector, baseline_coverage_matrix)
+}
+
 
 # THIS RUN runs through the few select cases for explicit plotting of vaccination
 # calendars and consequent epidemic curves.
@@ -573,13 +582,16 @@ if (SENSITIVITY_ANALYSIS) {
     delay_vector   <- seq(0, 60, length.out = 50)
     speedup_vector <- seq(0.8, 2, length.out = 50)
     
-    calendar_sensitivity_results <- calendar_sensitivity(delay_vector, speedup_vector)
+    calendar_sensitivity_results <- calendar_sensitivity(delay_vector=delay_vector,
+                                                         speedup_vector=speedup_vector,
+                                                         infection_delays=infection_delays,
+                                                         )
     
     # Plot for elderly or the high risk
-    contour_group <- "Elderly"
+    contour_group <- "elderly"
     quantity <- "PeakCaseNumbers"
     
-    if (contour_group == 'Elderly') {
+    if (contour_group == 'elderly') {
         if (quantity == 'TotalIliNumbers') {
             matrix_to_plot <- calendar_sensitivity_results$TotalIliNumbers[["LowRisk [65,+)"]] +
                 calendar_sensitivity_results$TotalIliNumbers[["HighRisk [65,+)"]]
@@ -587,7 +599,7 @@ if (SENSITIVITY_ANALYSIS) {
             matrix_to_plot <- calendar_sensitivity_results$PeakCaseNumbers[["LowRisk [65,+)"]] +
                 calendar_sensitivity_results$PeakCaseNumbers[["HighRisk [65,+)"]]
         }
-    } else if (contour_group == 'High Risk') {
+    } else if (contour_group == 'high-risk') {
         if (quantity == 'TotalIliNumbers') {
             matrix_to_plot <- calendar_sensitivity_results$TotalIliNumbers[["HighRisk [0,15)"]] +
                 calendar_sensitivity_results$TotalIliNumbers[["HighRisk [15,65)"]] +
@@ -595,16 +607,24 @@ if (SENSITIVITY_ANALYSIS) {
         }
     }
     
-    # THE BELOW SHOULD REALLY BE MADE BETTER BY INCLUDING INFORMATIVE FILE NAMES!
+
     if (SAVE_FOR_MATLAB) {
+        
+        datamatrix_filename <- paste("~/Documents/MATLAB/oxford/case-study-modelling/data_matrix-",
+                                     quantity, "-", contour_group, ".csv", sep = "")
+        delay_vec_filename <- paste("~/Documents/MATLAB/oxford/case-study-modelling/delay_vector-",
+                                    quantity, "-", contour_group, ".csv", sep = "")
+        speedup_vec_filename <- paste("~/Documents/MATLAB/oxford/case-study-modelling/speedup_vector-",
+                                      quantity, "-", contour_group, ".csv", sep = "")
+        
         # Save the matrix
-        write.csv(matrix_to_plot, file = "~/Documents/MATLAB/oxford/case-study-modelling/data_matrix.csv", sep = ",", col.names = FALSE, row.names = FALSE, quote = FALSE)
+        write.csv(matrix_to_plot, file = datamatrix_filename, sep = ",", col.names = FALSE, row.names = FALSE, quote = FALSE)
         
         # Save the delay vector
-        write.csv(delay_vector, file = "~/Documents/MATLAB/oxford/case-study-modelling/delay_vector.csv", row.names = FALSE, col.names = FALSE)
+        write.csv(delay_vector, file = delay_vec_filename, row.names = FALSE, col.names = FALSE)
         
         # Save the speedup vector
-        write.csv(speedup_vector, file = "~/Documents/MATLAB/oxford/case-study-modelling/speedup_vector.csv", row.names = FALSE, col.names = FALSE)
+        write.csv(speedup_vector, file = speedup_vec_filename, row.names = FALSE, col.names = FALSE)
     }
     
     # CONTOUR STUFF BELOW IS FAIRLY BROKEN, SO I DID IT IN MATLAB INSTEAD
