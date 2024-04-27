@@ -610,10 +610,10 @@ if (SENSITIVITY_ANALYSIS) {
 
     if (SAVE_FOR_MATLAB) {
         
-        datamatrix_filename <- paste("~/Documents/MATLAB/oxford/case-study-modelling/data_matrix-",
-                                     quantity, "-", contour_group, ".csv", sep = "")
-        delay_vec_filename <- paste("~/Documents/MATLAB/oxford/case-study-modelling/delay_vector-",
-                                    quantity, "-", contour_group, ".csv", sep = "")
+        datamatrix_filename  <- paste("~/Documents/MATLAB/oxford/case-study-modelling/data_matrix-",
+                                      quantity, "-", contour_group, ".csv", sep = "")
+        delay_vec_filename   <- paste("~/Documents/MATLAB/oxford/case-study-modelling/delay_vector-",
+                                      quantity, "-", contour_group, ".csv", sep = "")
         speedup_vec_filename <- paste("~/Documents/MATLAB/oxford/case-study-modelling/speedup_vector-",
                                       quantity, "-", contour_group, ".csv", sep = "")
         

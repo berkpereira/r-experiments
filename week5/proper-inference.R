@@ -89,9 +89,9 @@ population <- stratify_by_risk(ag, risk_ratios,
 # high risk young, middle, old
 
 
-# The coverage data below is somewhat loosely based on the real coverage data
-# for the 2022-23 season.
 
+# THE COVERAGE DATA BELOW ARE SOMEWHAT LOOSELY BASED ON THE REAL COVERAGE DATA
+# FOR THE 2022-23 SEASON, AS REFERENCED IN THE OBSIDIAN NOTES elements-of-modelling.md
 baseline_dates_vector <- as.Date(c("2022-09-01", "2022-09-30", "2022-10-31",
                           "2022-11-30", "2022-12-31", "2023-01-31", "2023-02-28"))
 
