@@ -17,15 +17,17 @@ data(polymod_uk)
 data(demography)
 
 PLOT_WIDTH <- 5.5 # inches
-PLOT_HEIGHT <- 3 # inches
+PLOT_HEIGHT <- 2.2 # inches
 FONT_SIZE <- 12 # points
 
 # Set a global theme for all ggplot2 plots
 theme_set(theme_minimal(base_size = 12) + 
               theme(
-                  plot.title = element_text(size = rel(1.2)),  # 120% of the base size
-                  axis.text = element_text(size = rel(0.8)),   # 80% of the base size
-                  axis.title = element_text(size = rel(1))     # 100% of the base size
+                  plot.title = element_text(hjust = 0.5),  
+                  axis.text.x = element_text(angle = 45, hjust = 1),
+                  axis.text = element_text(size = rel(0.8)),
+                  legend.title = element_text(size = rel(0.8)),
+                  legend.text = element_text(size = rel(0.8)),
               ))
 
 
@@ -105,10 +107,7 @@ plot_coverage_time_series <- function(dates, coverage, delay=NULL, speedup=NULL,
         labs(title = if (title) {paste("Vaccine Coverage Over Time", ifelse(!is.null(delay) && !is.null(speedup), 
                                                                 paste("\nDelay:", delay, "days, Speedup:", speedup), 
                                                                 "")) } else NULL, 
-             x = "Date", y = "Coverage (%)") +
-        theme_minimal() +
-        theme(plot.title = element_text(hjust = 0.5),  
-              axis.text.x = element_text(angle = 45, hjust = 1))
+             x = "Date", y = "Coverage (%)")
 }
 
 # Adjust plot_odes function
@@ -131,15 +130,8 @@ plot_odes <- function(odes, normalised=FALSE, delay=NULL, calendar_speedup=NULL,
         geom_point(size = 3) +  # Adjust size as needed
         scale_color_manual(values = age_group_colours) +
         scale_shape_manual(values = risk_group_shapes) +
-        labs(title = if (title) {paste("Weekly New Infections,", if(normalised) {"Normalised"} else {""}, "\n", 
-                           if(!is.null(delay) && !is.null(calendar_speedup)) {
-                               paste("Delay:", delay, "days, Speedup:", calendar_speedup)
-                           } else {""})} else NULL,
-             x = "Date", y = if(normalised) {"Newly Infected Fraction of Group"} else {"Number of Cases"}) +
-        theme_minimal() +
-        theme(plot.title = element_text(hjust = 0.5),  # Center-align the title
-              legend.position = if(labs) "right" else "none",  # Conditionally remove the legend if labs is FALSE
-              axis.text.x = element_text(angle = 45, hjust = 1)) +  # Apply 45-degree inclination to x-axis labels
+        labs(x = "Date", y = if(normalised) {"Newly Infected\nFraction of Group"} else {"Number of Cases"}) +
+        guides(color = FALSE, shape = FALSE) + # Remove labels
         scale_y_continuous(limits = c(NA, y_max)) +
         scale_x_date(limits = c(min(odes_long$Time), cutoff_date), date_breaks = "1 month", date_labels = "%b")  # Adjusted for cutoff_date
     
@@ -432,7 +424,7 @@ run_calendar_scenarios <- function(vaccine_delays, vaccine_speedups, vaccine_sca
             
             cases_plot <- plot_odes(normalised_odes, normalised=TRUE, delay=delay,
                                     calendar_speedup=calendar_speedup, cutoff_date = truncation_date,
-                                    y_max = 0.0017, labs = TRUE, title=FALSE)
+                                    y_max = 0.0017, labs = FALSE, title=FALSE)
             
             cases_filename <- paste("~/OneDrive - Nexus365/ox-mmsc-cloud/modelling-report/report/plots/cases-delay",
                                     delay, "-speedup", calendar_speedup, ".pdf", sep = "")
