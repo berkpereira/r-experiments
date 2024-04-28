@@ -260,12 +260,12 @@ interval <- 7
 ####################################################################################
 # INITIAL INFECTED
 ####################################################################################
-
-# same proportion in all age groups.
-# E.g., this amounts to 10110 initial infected in the [15, 65) age group.
-ag <- 3e-4 * c(population[1] + population[4],
+# Initial infections are distributed uniformly across all age groups and risk groups
+ag <- 3e-5 * c(population[1] + population[4],
                population[2] + population[5],
                population[3] + population[6])
+
+
 
 # for each age group, distribute initial cases uniformly across risk groups.
 # i.e., risk groups play no role in distributing initial infections.
@@ -274,7 +274,7 @@ initial_infected <- stratify_by_risk(ag, matrix(risk_ratios,nrow=1))
 
 
 ####################################################################################
-# VACCINE CALENDAR
+# VACCINE CALENDAR MODIFICATIONS
 ####################################################################################
 
 # FUNCTION TO GENERATE MODIFIED VACCINATION CALENDARS
@@ -333,20 +333,18 @@ modify_coverage_data <- function(baseline_dates, baseline_coverage,
 # EPIDEMIOLOGICAL PARAMETERS
 ####################################################################################
 
-# susceptibility <- c(0.7, 0.3) # (0.7, 0.3) from MODELLING VIGNETTE 
 susceptibility <- c(0.57, 0.72, 0.56) # Different for different ages
 transmissibility <- 0.14 # 0.14 taken from leeuwen2023 supplementary material
 
 
-# LOOK INTO EPIPARAMETER OR OTHER LITERATURE TO OBTAIN THESE VALUES HERE
-# values from paper: https://doi.org/10.1038/nature04017, as also used in
+# These values from paper: https://doi.org/10.1038/nature04017, as also used in
 # baguelin2013.pdf (see page 6)
-infection_delays <- c( 2/2.5, 2/1.1 ) 
+infection_delays <- c(2/2.5, 2/1.1)
 
 
 
 ####################################################################################
-# DEFINE PLOTTING FUNCTIONS
+# NORMALISE ODEs RESULTS (against size of each demographic group)
 ####################################################################################
 normalise_odes <- function(odes, population_vector) {
     normalised_odes <- odes
@@ -400,8 +398,8 @@ run_calendar_scenarios <- function(vaccine_delays, vaccine_speedups, vaccine_sca
                                                   delay = delay,
                                                   speedup = calendar_speedup,
                                                   title=FALSE)
-            cov_filename <- paste("coverage-delay", delay,
-                                  "-speedup", calendar_speedup, ".pdf", sep = "")
+            cov_filename <- paste("~/OneDrive - Nexus365/ox-mmsc-cloud/modelling-report/report/plots/coverage-delay",
+                                  delay, "-speedup", calendar_speedup, ".pdf", sep = "")
             ggsave(cov_filename, plot = cov_plot, width = PLOT_WIDTH, height = PLOT_HEIGHT)
         } 
         else {
@@ -428,17 +426,23 @@ run_calendar_scenarios <- function(vaccine_delays, vaccine_speedups, vaccine_sca
         normalised_odes <- normalise_odes(odes, population)
         
         if (savefig) {
+            #cases_plot <- plot_odes(normalised_odes, normalised=TRUE, delay=delay,
+            #                        calendar_speedup=calendar_speedup, cutoff_date = truncation_date,
+            #                        y_max=0.009, labs = TRUE, title=FALSE)
+            
             cases_plot <- plot_odes(normalised_odes, normalised=TRUE, delay=delay,
                                     calendar_speedup=calendar_speedup, cutoff_date = truncation_date,
-                                    y_max=0.009, labs = TRUE, title=FALSE)
-            cases_filename <- paste("cases-delay", delay,
-                                    "-speedup", calendar_speedup, ".pdf", sep = "")
+                                    y_max = 0.0017, labs = TRUE, title=FALSE)
+            
+            cases_filename <- paste("~/OneDrive - Nexus365/ox-mmsc-cloud/modelling-report/report/plots/cases-delay",
+                                    delay, "-speedup", calendar_speedup, ".pdf", sep = "")
             ggsave(cases_filename, plot = cases_plot, width = PLOT_WIDTH, height = PLOT_HEIGHT)
         }
         else {
+            # Consider the FIXING VERTICAL AXIS LIMITS
             cases_plot <- plot_odes(normalised_odes, normalised=TRUE, delay=delay,
                                     calendar_speedup=calendar_speedup, cutoff_date = truncation_date,
-                                    y_max=0.009, labs = TRUE, title=TRUE)
+                                    y_max=0.001, labs = TRUE, title=TRUE)
         }
         
         
@@ -546,7 +550,7 @@ vaccine_delays   <- c(0, 30, 0, 30)
 vaccine_speedups <- c(1, 1, 1.3, 1.3)
 vaccine_scalings <- c(1, 1, 1, 1) # keep it to ones, not very realistic to upscale as per Jasmina
 
-PLOT_BASELINE_COVERAGE <- TRUE
+PLOT_BASELINE_COVERAGE <- FALSE
 
 SAVE_PLOT <- TRUE
 
@@ -639,3 +643,5 @@ if (SENSITIVITY_ANALYSIS) {
         save_image(contour_fig, file=contour_filename, width = PLOT_WIDTH, height = PLOT_HEIGHT)
     }
 }
+
+
