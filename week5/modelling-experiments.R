@@ -13,21 +13,26 @@ library(plotly)
 library(latex2exp)
 library(extrafont)
 
+# Below maybe not required?
+loadfonts(device = "pdf")  # Use this on Mac or Linux
+
 data(polymod_uk)
 data(demography)
 
-PLOT_WIDTH <- 5.5 # inches
-PLOT_HEIGHT <- 2.2 # inches
-FONT_SIZE <- 12 # points
+# Basic plot width allowed by the text width seems to be about (for some
+# reason only) 5.7 inches.
+PAGE_WIDTH <- 5.7 # inches
+PLOT_HEIGHT <- 2.4 # inches
+FONT_SIZE <- 10 # points
 
 # Set a global theme for all ggplot2 plots
-theme_set(theme_minimal(base_size = 12) + 
+theme_set(theme_minimal(base_size = FONT_SIZE, base_family = "Helvetica") + 
               theme(
                   plot.title = element_text(hjust = 0.5),  
-                  axis.text.x = element_text(angle = 45, hjust = 1),
-                  axis.text = element_text(size = rel(0.8)),
-                  legend.title = element_text(size = rel(0.8)),
-                  legend.text = element_text(size = rel(0.8)),
+                  axis.text.x = element_text(size = 8, angle = 45, hjust = 1),
+                  axis.text = element_text(size = 9),
+                  legend.title = element_text(size = 7),
+                  legend.text = element_text(size = 7),
               ))
 
 
@@ -66,7 +71,7 @@ viro <- infer_data$viro
 
 age_group_colours <- c("[0,15)" = "#377eb8", "[15,65)" = "#ff7f00", "[65,+)" = "#4daf4a")
 risk_group_shapes <- c("Low Risk" = 16, "High Risk" = 17)  # 16 = circle, 17 = triangle
-marker_size <- 2
+marker_size <- 1.5
 
 
 
@@ -98,7 +103,7 @@ plot_coverage_time_series <- function(dates, coverage, delay=NULL, speedup=NULL,
     
     ggplot(long_coverage_df, aes(x = Date, y = Coverage, color = AgeGroup, shape = RiskGroup)) +
         geom_line(aes(group = Series)) + 
-        geom_point(size = 3) + 
+        geom_point(size = marker_size) + 
         scale_color_manual(values = age_group_colours) +
         scale_shape_manual(values = risk_group_shapes) +
         scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
@@ -107,7 +112,7 @@ plot_coverage_time_series <- function(dates, coverage, delay=NULL, speedup=NULL,
         labs(title = if (title) {paste("Vaccine Coverage Over Time", ifelse(!is.null(delay) && !is.null(speedup), 
                                                                 paste("\nDelay:", delay, "days, Speedup:", speedup), 
                                                                 "")) } else NULL, 
-             x = "Date", y = "Coverage (%)")
+             x = "Date", y = "Coverage")
 }
 
 # Adjust plot_odes function
@@ -127,10 +132,10 @@ plot_odes <- function(odes, normalised=FALSE, delay=NULL, calendar_speedup=NULL,
     
     p <- ggplot(odes_long, aes(x = Time, y = Cases, color = AgeGroup, shape = RiskGroup)) +
         geom_line(aes(group = Group)) +
-        geom_point(size = 3) +  # Adjust size as needed
+        geom_point(size = marker_size) +  
         scale_color_manual(values = age_group_colours) +
         scale_shape_manual(values = risk_group_shapes) +
-        labs(x = "Date", y = if(normalised) {"Newly Infected\nFraction of Group"} else {"Number of Cases"}) +
+        labs(x = "Date", y = if(normalised) {"New Infections\n(Weekly, Normalised)"} else {"Number of Cases"}) +
         guides(color = FALSE, shape = FALSE) + # Remove labels
         scale_y_continuous(limits = c(NA, y_max)) +
         scale_x_date(limits = c(min(odes_long$Time), cutoff_date), date_breaks = "1 month", date_labels = "%b")  # Adjusted for cutoff_date
@@ -392,7 +397,7 @@ run_calendar_scenarios <- function(vaccine_delays, vaccine_speedups, vaccine_sca
                                                   title=FALSE)
             cov_filename <- paste("~/OneDrive - Nexus365/ox-mmsc-cloud/modelling-report/report/plots/coverage-delay",
                                   delay, "-speedup", calendar_speedup, ".pdf", sep = "")
-            ggsave(cov_filename, plot = cov_plot, width = PLOT_WIDTH, height = PLOT_HEIGHT)
+            ggsave(cov_filename, plot = cov_plot, width = 0.5 * PAGE_WIDTH, height = PLOT_HEIGHT)
         } 
         else {
             cov_plot <- plot_coverage_time_series(new_dates_vector, new_coverage_matrix,
@@ -428,7 +433,7 @@ run_calendar_scenarios <- function(vaccine_delays, vaccine_speedups, vaccine_sca
             
             cases_filename <- paste("~/OneDrive - Nexus365/ox-mmsc-cloud/modelling-report/report/plots/cases-delay",
                                     delay, "-speedup", calendar_speedup, ".pdf", sep = "")
-            ggsave(cases_filename, plot = cases_plot, width = PLOT_WIDTH, height = PLOT_HEIGHT)
+            ggsave(cases_filename, plot = cases_plot, width = 0.5 * PAGE_WIDTH, height = PLOT_HEIGHT)
         }
         else {
             # Consider the FIXING VERTICAL AXIS LIMITS
@@ -628,12 +633,6 @@ if (SENSITIVITY_ANALYSIS) {
     #                     title = paste("Total Season Cases in ", contour_group, " Population", sep = ""))
     
     # print(contour_fig)
-    
-    if (SAVE_CONTOUR) {
-        contour_filename <- paste("contour-group", contour_group,
-                                  "-quantity-", quantity, ".pdf", sep = "")
-        save_image(contour_fig, file=contour_filename, width = PLOT_WIDTH, height = PLOT_HEIGHT)
-    }
 }
 
 
