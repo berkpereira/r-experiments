@@ -549,14 +549,15 @@ vaccine_scalings <- c(1, 1, 1, 1) # keep it to ones, not very realistic to upsca
 
 PLOT_BASELINE_COVERAGE <- FALSE
 
-SAVE_PLOT <- TRUE
+RUN_CALENDAR_SCENARIOS <- FALSE
 
-SENSITIVITY_ANALYSIS <- FALSE
+SAVE_PLOT <- FALSE
 
-RUN_CALENDAR_SCENARIOS <- TRUE
 
-# SHOULD IMPROVE FILE NAMING FOR MATLAB BEFORE SAVING ANY FURTHER STUFF!
-SAVE_FOR_MATLAB <- FALSE
+
+SENSITIVITY_ANALYSIS <- TRUE
+
+SAVE_FOR_MATLAB <- TRUE
 
 # Plots baseline vaccine calendar coverage
 if (PLOT_BASELINE_COVERAGE) {
@@ -585,11 +586,10 @@ if (SENSITIVITY_ANALYSIS) {
     
     calendar_sensitivity_results <- calendar_sensitivity(delay_vector=delay_vector,
                                                          speedup_vector=speedup_vector,
-                                                         infection_delays=infection_delays,
-                                                         )
+                                                         infection_delays=infection_delays)
     
     # Plot for elderly or the high risk
-    contour_group <- "elderly"
+    contour_group <- "high-risk"
     quantity <- "PeakCaseNumbers"
     
     if (contour_group == 'elderly') {
@@ -605,6 +605,10 @@ if (SENSITIVITY_ANALYSIS) {
             matrix_to_plot <- calendar_sensitivity_results$TotalIliNumbers[["HighRisk [0,15)"]] +
                 calendar_sensitivity_results$TotalIliNumbers[["HighRisk [15,65)"]] +
                 calendar_sensitivity_results$TotalIliNumbers[["HighRisk [65,+)"]]
+        } else if (quantity == 'PeakCaseNumbers') {
+            matrix_to_plot <- calendar_sensitivity_results$PeakCaseNumbers[["HighRisk [0,15)"]] +
+                calendar_sensitivity_results$PeakCaseNumbers[["HighRisk [15,65)"]] +
+                calendar_sensitivity_results$PeakCaseNumbers[["HighRisk [65,+)"]]
         }
     }
     
